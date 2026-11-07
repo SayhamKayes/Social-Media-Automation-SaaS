@@ -1,0 +1,544 @@
+{
+  "name": "Facebook Chat Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "path": "6af2a32e-d537-4d95-99f2-f926765a5933",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1008,
+        -32
+      ],
+      "id": "814d6fe5-b67a-4b04-872f-fac911ecd23b",
+      "name": "Webhook",
+      "webhookId": "6af2a32e-d537-4d95-99f2-f926765a5933"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.entry[0].messaging[0].message.text }}",
+        "options": {
+          "systemMessage": "You are a helpful assistant\n\n# Role & Identity\nYou are an expert, highly polite, and persuasive Senior Sales Consultant at SKzLAB (a leading software development and AI agency). Your primary goal is to guide clients smoothly, recommend suitable packages, answer questions, and secure orders via Messenger chat.\n\n# Communication Tone & Style\n- Polite, welcoming, helpful, and professional (Bengali / Banglish / English matching the user's language).\n- Sound like a human sales expert, not a rigid robot.\n- Keep Messenger messages clean, concise, and easy to read on mobile. Avoid sending overwhelming long blocks of text.\n- Do not pester or rush the customer. Always maintain a smooth and helpful conversation flow.\n\n# Available Tools\n1. `Products` (Google Sheet): Use this to search base packages, add-ons, pricing (BDT/USD), and delivery timelines. Never guess or hallucinate pricing.\n2. `FAQ` (Google Sheet): Use this to answer agency questions, workflow processes, payment methods, and company policies.\n3. `Append row in sheet in Google Sheets` (Orders Sheet): Use this tool ONLY to record a confirmed order.\n\n# Step-by-Step Sales & Order Workflow\n\n### Step 1: Discovery & Consultation\n- Greet the client warmly.\n- Understand their business requirements and recommend the best Base Package (Web Development, AI Integration, SaaS Product, or App Development) along with relevant Add-ons using the `Products` tool.\n\n### Step 2: Information Gathering for Order\nWhen the customer shows clear intent to purchase or order, collect the following details politely (one or two at a time, without overwhelming them):\n1. Full Name\n2. Phone Number\n3. Email Address\n4. Selected Package & Add-ons (calculate and state the total price clearly in BDT/USD)\n5. Project Requirements / Brief note\n\n### Step 3: Mandatory Pre-Confirmation (CRITICAL)\n- Once all details are collected, you MUST NOT trigger the Google Sheets order tool immediately.\n- Instead, present a clean summary of their order details to the customer:\n\nExample format:\n\"ধন্যবাদ! আপনার অর্ডারের তথ্যগুলো নিচে দেওয়া হলো, দয়া করে একটু যাচাই করে নিন:\n• নাম: [Customer Name]\n• ফোন নম্বর: [Phone Number]\n• ইমেইল: [Email]\n• প্যাকেজ ও অ্যাড-অন: [Selected Package & Add-ons]\n• মোট মূল্য: [Total BDT/USD]\n• প্রজেক্টের সংক্ষিপ্ত বিবরণ: [Requirements]\n\nআপনার তথ্যগুলো সব ঠিক আছে কি না একটু দেখে নিন, আমি কি অর্ডারটি কনফার্ম করব?\"\n\n### Step 4: Final Confirmation & Tool Execution (STRICT RULE)\n- ONLY trigger the `Append row in sheet in Google Sheets` tool if the customer explicitly replies with confirmation (e.g., \"হ্যাঁ\", \"কনফার্ম\", \"হাঁ\", \"ঠিক আছে\", \"Confirm\", \"Yes\", \"করুন\").\n- If the customer wants to edit or change any information, update the details and present the summary again.\n- NEVER call the order append tool if the customer has not explicitly said \"Yes/Confirm\" to the summary.\n- Do NOT use markdown bolding (e.g., do not use `**word**` or `*word*`). Meta Messenger cannot render markdown stars. Output plain clean text only.\n- CRITICAL: Never call the 'Orders' tool unless you have successfully received all required fields: Customer Name, Phone Number, and Selected Package. If any field is missing, ask for that information first, even if the user says \"Yes\" or \"Confirm\".\n\n### Step 5: Post-Order Closing\nOnce the order is successfully recorded in the sheet:\n- Congratulate and thank the client.\n- Inform them that the SKzLAB technical team will review the details and contact them directly within a short time to begin the onboarding and project kick-off."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -560,
+        128
+      ],
+      "id": "cb9cdcbd-35fc-4288-a5a6-350f4ff248a9",
+      "name": "AI Agent",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v27.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "EAAbx1whxNGcBS2IMOyDSjADLVqGR7JiT1RBz4umoI4ABiZA7Mz1gZBP9qACPpXmlj7LfJVeI5AZCHN7ymJl4sOFtFtXvX354NOSqSSYHrC5LvyFdZC2gDeJ29sQg8VSC7O2d77cozqyjNKzuN8HmbxYIpnopG4NbJr9umzHEuUZBJhvWJ4yW235Ol7dl5cPesoyVZAX8DZBCxY8mzpSywU16AZDZD"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ \n  (() => {\n    function makeUnicodeBold(str) {\n      if (!str) return '';\n      return str.replace(/\\*\\*(.*?)\\*\\*/g, (match, text) => {\n        return text.split('').map(char => {\n          const code = char.charCodeAt(0);\n          if (code >= 65 && code <= 90) return String.fromCodePoint(0x1D5D4 + (code - 65));\n          if (code >= 97 && code <= 122) return String.fromCodePoint(0x1D5EE + (code - 97));\n          if (code >= 48 && code <= 57) return String.fromCodePoint(0x1D7EC + (code - 48));\n          return char;\n        }).join('');\n      });\n    }\n\n    return JSON.stringify({\n      recipient: {\n        id: $('Webhook').first().json.body.entry[0].messaging[0].sender.id\n      },\n      messaging_type: \"RESPONSE\",\n      message: {\n        text: makeUnicodeBold($json.output)\n      }\n    });\n  })()\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -176,
+        128
+      ],
+      "id": "15b0d6f5-3fb4-42d1-abb4-e7ad0cbd00c6",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        -768,
+        352
+      ],
+      "id": "f90b287c-0161-4277-bad3-363bfcec9bf8",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "UqvfJ4ubCupIVNCU",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.body.entry[0].messaging[0].sender.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        -608,
+        352
+      ],
+      "id": "a4f69aa3-406f-400e-86c6-15c335c3902b",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM",
+          "mode": "list",
+          "cachedResultName": "Facebook Chat Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Products",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -480,
+        352
+      ],
+      "id": "a82c1f51-23c7-4365-9648-40f06be4181a",
+      "name": "Products",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "f1y2aSCsuUJD1wXZ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM",
+          "mode": "list",
+          "cachedResultName": "Facebook Chat Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1616158618,
+          "mode": "list",
+          "cachedResultName": "FAQ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM/edit#gid=1616158618"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -352,
+        352
+      ],
+      "id": "f1c9f078-8384-42f8-8838-eace35eca344",
+      "name": "FAQ",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "f1y2aSCsuUJD1wXZ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "564681f3-c924-445a-93ab-3b2ca89e559a",
+              "leftValue": "={{ $json.query.hub_mode }}",
+              "rightValue": "subscribe",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "546dcbc9-74f2-480f-bdc6-4b287171e8ff",
+              "leftValue": "={{ $json.query.hub_verify_token }}",
+              "rightValue": "sayham",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -784,
+        -176
+      ],
+      "id": "243a8853-5f49-4712-a548-7d313157d7cf",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -368,
+        -192
+      ],
+      "id": "9ad36b2d-bd0e-43db-989a-6f1c52844721",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM",
+          "mode": "list",
+          "cachedResultName": "Facebook Chat Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1099174435,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM/edit#gid=1099174435"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Order_ID": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Order_ID', ``, 'string') }}",
+            "Timestamp": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Timestamp', ``, 'string') }}",
+            "Customer_Name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Customer_Name', ``, 'string') }}",
+            "Sender_ID": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Sender_ID', ``, 'string') }}",
+            "Phone_Number": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Phone_Number', ``, 'string') }}",
+            "Email": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Email', ``, 'string') }}",
+            "Selected_Package": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Selected_Package', ``, 'string') }}",
+            "Selected_Addons": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Selected_Addons', ``, 'string') }}",
+            "Total_Amount_BDT": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Total_Amount_BDT', ``, 'string') }}",
+            "Total_Amount_USD": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Total_Amount_USD', ``, 'string') }}",
+            "Order_Status": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Order_Status', ``, 'string') }}",
+            "Customer_Requirements": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Customer_Requirements', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Order_ID",
+              "displayName": "Order_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Customer_Name",
+              "displayName": "Customer_Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Sender_ID",
+              "displayName": "Sender_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone_Number",
+              "displayName": "Phone_Number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Selected_Package",
+              "displayName": "Selected_Package",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Selected_Addons",
+              "displayName": "Selected_Addons",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total_Amount_BDT",
+              "displayName": "Total_Amount_BDT",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total_Amount_USD",
+              "displayName": "Total_Amount_USD",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Order_Status",
+              "displayName": "Order_Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Customer_Requirements",
+              "displayName": "Customer_Requirements",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -224,
+        352
+      ],
+      "id": "d30de848-fc91-425c-9d4b-14c8bd57938f",
+      "name": "Orders",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "f1y2aSCsuUJD1wXZ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "98b787a7-7f55-4887-913a-ce9931ed5697",
+              "leftValue": "={{ $json.body.entry[0].messaging[0].message.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        -784,
+        128
+      ],
+      "id": "cc0371eb-3f62-48df-bf1e-83cf7444528a",
+      "name": "Filter"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Products": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAQ": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orders": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2d5d2e54-6e9f-4919-8647-a374e6efcca0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "af54b1ea6e06e258ee1272a178c56ebe478ffa25050fad834f885aefefa0af04"
+  },
+  "nodeGroups": [],
+  "id": "iVSTnJdChayJu9pd",
+  "tags": []
+}

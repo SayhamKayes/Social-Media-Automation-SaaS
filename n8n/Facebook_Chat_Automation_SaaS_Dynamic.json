@@ -1,0 +1,407 @@
+{
+  "name": "Facebook Chat Automation (SaaS Multi-Tenant Dynamic)",
+  "nodes": [
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "path": "facebook-messenger-saas",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1200,
+        -32
+      ],
+      "id": "814d6fe5-b67a-4b04-872f-fac911ecd23b",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "564681f3-c924-445a-93ab-3b2ca89e559a",
+              "leftValue": "={{ $json.query.hub_mode }}",
+              "rightValue": "subscribe",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -950,
+        -176
+      ],
+      "id": "243a8853-5f49-4712-a548-7d313157d7cf",
+      "name": "If Webhook Verification"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -650,
+        -176
+      ],
+      "id": "9ad36b2d-bd0e-43db-989a-6f1c52844721",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "98b787a7-7f55-4887-913a-ce9931ed5697",
+              "leftValue": "={{ $json.body.entry[0].messaging[0].message.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        -950,
+        128
+      ],
+      "id": "cc0371eb-3f62-48df-bf1e-83cf7444528a",
+      "name": "Filter Incoming Message"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT * FROM business_pages WHERE page_id = '{{ $('Webhook').first().json.body.entry[0].id }}' AND is_active = true LIMIT 1;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -720,
+        128
+      ],
+      "id": "e82a93b4-41d1-42ab-b193-9c88219ef102",
+      "name": "Get Client Business Config",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Webhook').first().json.body.entry[0].messaging[0].message.text }}",
+        "options": {
+          "systemMessage": "={{ $('Get Client Business Config').first().json.system_prompt || 'You are an expert, highly polite, and persuasive Senior Sales Consultant. Your primary goal is to guide clients smoothly, recommend suitable packages, answer questions, and secure orders via Messenger chat.\\n\\nAlways verify customer confirmation before submitting any order.' }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -480,
+        128
+      ],
+      "id": "cb9cdcbd-35fc-4288-a5a6-350f4ff248a9",
+      "name": "AI Agent",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        -680,
+        352
+      ],
+      "id": "f90b287c-0161-4277-bad3-363bfcec9bf8",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook').first().json.body.entry[0].messaging[0].sender.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        -540,
+        352
+      ],
+      "id": "a4f69aa3-406f-400e-86c6-15c335c3902b",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Get Client Business Config').first().json.products_sheet_id || '15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM' }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Products"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -400,
+        352
+      ],
+      "id": "a82c1f51-23c7-4365-9648-40f06be4181a",
+      "name": "Products"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Get Client Business Config').first().json.faq_sheet_id || '15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM' }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1616158618,
+          "mode": "list",
+          "cachedResultName": "FAQ"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -270,
+        352
+      ],
+      "id": "f1c9f078-8384-42f8-8838-eace35eca344",
+      "name": "FAQ"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Get Client Business Config').first().json.orders_sheet_id || '15YQgYbQ7DDMGEEk33VlIfsv090abgBXBvUTaYG-LujM' }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1099174435,
+          "mode": "list",
+          "cachedResultName": "Orders"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Order_ID": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Order_ID', ``, 'string') }}",
+            "Timestamp": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Timestamp', ``, 'string') }}",
+            "Customer_Name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Customer_Name', ``, 'string') }}",
+            "Sender_ID": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Sender_ID', ``, 'string') }}",
+            "Phone_Number": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Phone_Number', ``, 'string') }}",
+            "Email": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Email', ``, 'string') }}",
+            "Selected_Package": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Selected_Package', ``, 'string') }}",
+            "Selected_Addons": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Selected_Addons', ``, 'string') }}",
+            "Total_Amount_BDT": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Total_Amount_BDT', ``, 'string') }}",
+            "Total_Amount_USD": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Total_Amount_USD', ``, 'string') }}",
+            "Order_Status": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Order_Status', ``, 'string') }}",
+            "Customer_Requirements": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Customer_Requirements', ``, 'string') }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -140,
+        352
+      ],
+      "id": "d30de848-fc91-425c-9d4b-14c8bd57938f",
+      "name": "Orders"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v27.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $('Get Client Business Config').first().json.page_access_token || 'FALLBACK_OR_DEFAULT_TOKEN' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ \n  (() => {\n    function makeUnicodeBold(str) {\n      if (!str) return '';\n      return str.replace(/\\*\\*(.*?)\\*\\*/g, (match, text) => {\n        return text.split('').map(char => {\n          const code = char.charCodeAt(0);\n          if (code >= 65 && code <= 90) return String.fromCodePoint(0x1D5D4 + (code - 65));\n          if (code >= 97 && code <= 122) return String.fromCodePoint(0x1D5EE + (code - 97));\n          if (code >= 48 && code <= 57) return String.fromCodePoint(0x1D7EC + (code - 48));\n          return char;\n        }).join('');\n      });\n    }\n\n    return JSON.stringify({\n      recipient: {\n        id: $('Webhook').first().json.body.entry[0].messaging[0].sender.id\n      },\n      messaging_type: \"RESPONSE\",\n      message: {\n        text: makeUnicodeBold($json.output)\n      }\n    });\n  })()\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -100,
+        128
+      ],
+      "id": "15b0d6f5-3fb4-42d1-abb4-e7ad0cbd00c6",
+      "name": "Send Messenger Reply"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If Webhook Verification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Filter Incoming Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Webhook Verification": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Incoming Message": {
+      "main": [
+        [
+          {
+            "node": "Get Client Business Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Client Business Config": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send Messenger Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Products": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAQ": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orders": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}
+
