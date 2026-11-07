@@ -34,7 +34,6 @@ This guide explains how to host your production n8n automation engine on **Rende
 | Key | Value | Note |
 | :--- | :--- | :--- |
 | `DB_TYPE` | `postgresdb` | Tell n8n to use PostgreSQL |
-| `DB_POSTGRESDB_SCHEMA` | `n8n` | Dedicated schema for n8n internal tables |
 | `N8N_ENCRYPTION_KEY` | `SocialMediaSaaS2026SecureKey!` | Permanent encryption key across redeploys |
 | `DB_POSTGRESDB_HOST` | `aws-0-ap-northeast-2.pooler.supabase.com` | Supabase IPv4 Pooler host |
 | `DB_POSTGRESDB_PORT` | `6543` | Supabase Transaction Pooler port |
@@ -44,9 +43,10 @@ This guide explains how to host your production n8n automation engine on **Rende
 | `DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED` | `false` | Required for Supabase SSL |
 | `PORT` | `5678` | Tells Render which port to bind |
 | `N8N_PORT` | `5678` | Internal n8n port |
+| `N8N_LISTEN_ADDRESS` | `0.0.0.0` | Force IPv4 binding so Render port scanner detects it |
 | `N8N_PROTOCOL` | `https` | Use HTTPS |
-| `N8N_HOST` | `your-render-app-name.onrender.com` | Your Render domain |
-| `WEBHOOK_URL` | `https://your-render-app-name.onrender.com/` | Used by Facebook Webhook |
+| `N8N_HOST` | `social-automation-saas-dfg4.onrender.com` | Raw hostname (NO https:// or trailing /) |
+| `WEBHOOK_URL` | `https://social-automation-saas-dfg4.onrender.com/` | Used by Facebook Webhook |
 | `EXECUTIONS_DATA_PRUNE` | `true` | Prevents RAM overflow on 512MB RAM |
 | `EXECUTIONS_DATA_MAX_AGE` | `48` | Keeps execution logs for 48 hours |
 | `GENERIC_TIMEZONE` | `Asia/Dhaka` | Your local timezone |
