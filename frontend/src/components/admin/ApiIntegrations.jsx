@@ -8,22 +8,28 @@ import {
   ShieldCheck, 
   Bot, 
   ExternalLink,
-  Cpu
+  Cpu,
+  Info,
+  Pencil
 } from 'lucide-react';
 
 export default function ApiIntegrations({ pages = [] }) {
   const [copiedField, setCopiedField] = useState(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isEditingWebhook, setIsEditingWebhook] = useState(false);
+
+  // Webhook URL state with localStorage persistence
+  const [webhookUrl, setWebhookUrl] = useState(() => {
+    return localStorage.getItem('saas_webhook_url') || "https://social-automation-saas-dfg4.onrender.com/webhook/facebook-messenger-saas";
+  });
 
   // API Config states
-  const [metaAppId, setMetaAppId] = useState('');
-  const [metaAppSecret, setMetaAppSecret] = useState('');
-  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [metaAppId, setMetaAppId] = useState(() => localStorage.getItem('saas_meta_app_id') || '');
+  const [metaAppSecret, setMetaAppSecret] = useState(() => localStorage.getItem('saas_meta_app_secret') || '');
+  const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('saas_gemini_api_key') || '');
   const [whatsappPhoneId, setWhatsappPhoneId] = useState('');
   const [whatsappWabaId, setWhatsappWabaId] = useState('');
   const [verifyToken, setVerifyToken] = useState('socialsaas_secret');
-
-  const webhookUrl = "https://social-automation-saas-dfg4.onrender.com/webhook/facebook-messenger-saas";
 
   const handleCopy = (text, fieldName) => {
     navigator.clipboard.writeText(text);
@@ -31,8 +37,19 @@ export default function ApiIntegrations({ pages = [] }) {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  const handleSaveWebhookUrl = () => {
+    localStorage.setItem('saas_webhook_url', webhookUrl);
+    setIsEditingWebhook(false);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+  };
+
   const handleSave = (e) => {
     e.preventDefault();
+    localStorage.setItem('saas_meta_app_id', metaAppId);
+    localStorage.setItem('saas_meta_app_secret', metaAppSecret);
+    localStorage.setItem('saas_gemini_api_key', geminiApiKey);
+    localStorage.setItem('saas_webhook_url', webhookUrl);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
@@ -49,7 +66,7 @@ export default function ApiIntegrations({ pages = [] }) {
       {savedSuccess && (
         <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-sm flex items-center space-x-2">
           <Check className="w-4 h-4 shrink-0" />
-          <span>API credentials updated and saved securely!</span>
+          <span>API credentials and Webhook URL saved successfully!</span>
         </div>
       )}
 
@@ -64,21 +81,50 @@ export default function ApiIntegrations({ pages = [] }) {
             Active 24/7
           </span>
         </div>
-        <p className="text-xs text-slate-300">
-          Paste this Callback URL and Verify Token into your Meta (Facebook) Developer App under Messenger Webhooks.
-        </p>
+
+        <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 space-y-1">
+          <p className="flex items-center space-x-1.5 font-semibold text-white">
+            <Info className="w-4 h-4 text-indigo-400 shrink-0" />
+            <span>Where to paste this in Meta?</span>
+          </p>
+          <p className="text-slate-400 pl-5 leading-relaxed">
+            Copy this <strong>Callback URL</strong> and <strong>Verify Token</strong> into{' '}
+            <a href="https://developers.facebook.com" target="_blank" rel="noreferrer" className="text-indigo-400 underline">Meta Developer Portal</a>{' '}
+            $\rightarrow$ <em>Messenger $\rightarrow$ Webhooks</em>. If you are using Ngrok locally, paste your live Ngrok URL here.
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
           <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-              Callback URL
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Callback URL {isEditingWebhook && '(Edit your Ngrok or Domain URL)'}
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isEditingWebhook) {
+                    handleSaveWebhookUrl();
+                  } else {
+                    setIsEditingWebhook(true);
+                  }
+                }}
+                className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center space-x-1"
+              >
+                <Pencil className="w-3 h-3" />
+                <span>{isEditingWebhook ? 'Save URL' : 'Change URL'}</span>
+              </button>
+            </div>
             <div className="flex items-center space-x-2">
               <input
                 type="text"
-                readOnly
+                readOnly={!isEditingWebhook}
                 value={webhookUrl}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs font-mono select-all focus:outline-none"
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://your-domain.com/webhook/facebook-messenger-saas"
+                className={`w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs font-mono focus:outline-none ${
+                  isEditingWebhook ? 'border-indigo-500 ring-1 ring-indigo-500' : 'select-all'
+                }`}
               />
               <button
                 type="button"
@@ -122,120 +168,85 @@ export default function ApiIntegrations({ pages = [] }) {
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-white flex items-center space-x-2">
               <KeyRound className="w-4 h-4 text-blue-400" />
-              <span>Meta Developer App Credentials (Facebook &amp; Instagram)</span>
+              <span>Owner Meta Developer App (Optional / Advanced)</span>
             </h3>
-            <a
-              href="https://developers.facebook.com/apps"
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center space-x-1"
-            >
-              <span>Meta App Console</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-medium">
+              Only for SaaS Owner
+            </span>
           </div>
+          <p className="text-xs text-slate-400">
+            Note: Clients only need their <strong>Page ID</strong> and <strong>Page Access Token</strong> in the Social Media tab. You only need to configure App ID and Secret here if you plan to enable automatic Facebook OAuth Login.
+          </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
                 Meta App ID
               </label>
               <input
                 type="text"
-                placeholder="e.g. 159283746192837"
+                placeholder="e.g. 15928394018234"
                 value={metaAppId}
                 onChange={(e) => setMetaAppId(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
                 Meta App Secret
               </label>
               <input
                 type="password"
-                placeholder="••••••••••••••••••••••••"
+                placeholder="••••••••••••••••••••••••••••••••"
                 value={metaAppSecret}
                 onChange={(e) => setMetaAppSecret(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition"
               />
             </div>
           </div>
         </div>
 
-        {/* AI Engine API (Gemini) */}
+        {/* Gemini API Key */}
         <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-white flex items-center space-x-2">
-              <Bot className="w-4 h-4 text-indigo-400" />
-              <span>Google Gemini AI API (Bring Your Own Key)</span>
+              <Bot className="w-4 h-4 text-emerald-400" />
+              <span>Google Gemini AI API Key</span>
             </h3>
             <a
-              href="https://aistudio.google.com/app/apikey"
+              href="https://aistudio.google.com/apikey"
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center space-x-1"
+              className="text-xs text-indigo-400 hover:text-indigo-300 inline-flex items-center space-x-1"
             >
-              <span>Get Free API Key</span>
+              <span>Get Free Key</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              Google AI Studio API Key (Free Tier - 1,500 requests/day)
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+              Gemini API Studio Key
             </label>
             <input
               type="password"
               placeholder="AIzaSy..."
               value={geminiApiKey}
               onChange={(e) => setGeminiApiKey(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition"
             />
+            <p className="text-[11px] text-slate-500 mt-1">
+              Used by n8n LangChain AI Agent for generating natural, persuasive sales messages in Bengali/English.
+            </p>
           </div>
         </div>
 
-        {/* WhatsApp Cloud API Credentials */}
-        <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-          <h3 className="text-base font-bold text-white flex items-center space-x-2">
-            <Cpu className="w-4 h-4 text-emerald-400" />
-            <span>WhatsApp Business Cloud API (Optional)</span>
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                Phone Number ID
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 1092837465019"
-                value={whatsappPhoneId}
-                onChange={(e) => setWhatsappPhoneId(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                WhatsApp Business Account (WABA) ID
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 2938475610293"
-                value={whatsappWabaId}
-                onChange={(e) => setWhatsappWabaId(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-          </div>
-        </div>
-
+        {/* Save All API Credentials */}
         <div className="flex justify-end">
           <button
             type="submit"
-            className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/30"
+            className="inline-flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/30"
           >
             <Save className="w-4 h-4" />
             <span>Save API Configurations</span>
@@ -245,4 +256,3 @@ export default function ApiIntegrations({ pages = [] }) {
     </div>
   );
 }
-

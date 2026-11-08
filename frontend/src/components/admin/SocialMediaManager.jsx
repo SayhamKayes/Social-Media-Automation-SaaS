@@ -6,13 +6,16 @@ import {
   Linkedin, 
   Plus, 
   Trash2, 
+  Pencil,
   CheckCircle2, 
   AlertCircle, 
   HelpCircle, 
   ExternalLink, 
   ShieldCheck,
   Send,
-  Sparkles
+  Sparkles,
+  KeyRound,
+  Info
 } from 'lucide-react';
 
 export default function SocialMediaManager({ pages = [], onSavePage, onDeletePage }) {
@@ -22,6 +25,9 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Editing state
+  const [editingPageId, setEditingPageId] = useState(null);
 
   // Form states for Facebook
   const [pageId, setPageId] = useState('');
@@ -35,6 +41,27 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
     { id: 'whatsapp', name: 'WhatsApp', icon: MessageCircle, count: 0, active: false, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
     { id: 'linkedin', name: 'LinkedIn', icon: Linkedin, count: 0, active: false, color: 'text-sky-400', bg: 'bg-sky-500/10' },
   ];
+
+  const handleStartEdit = (page) => {
+    setEditingPageId(page.page_id);
+    setPageId(page.page_id);
+    setPageName(page.page_name || '');
+    setPageAccessToken(page.page_access_token || '');
+    setVerifyToken(page.verify_token || 'socialsaas_secret');
+    setShowAddForm(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+  };
+
+  const handleCancelForm = () => {
+    setEditingPageId(null);
+    setPageId('');
+    setPageName('');
+    setPageAccessToken('');
+    setVerifyToken('socialsaas_secret');
+    setShowAddForm(false);
+    setErrorMsg('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,11 +83,8 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
         is_active: true
       });
 
-      setSuccessMsg('Facebook Page connected and saved successfully!');
-      setPageId('');
-      setPageName('');
-      setPageAccessToken('');
-      setShowAddForm(false);
+      setSuccessMsg(editingPageId ? 'Facebook Page updated successfully!' : 'Facebook Page connected and saved successfully!');
+      handleCancelForm();
     } catch (err) {
       setErrorMsg(err.message || 'Failed to save page.');
     } finally {
@@ -89,7 +113,14 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
               <span>Token Guide</span>
             </button>
             <button
-              onClick={() => setShowAddForm(!showAddForm)}
+              onClick={() => {
+                if (showAddForm) {
+                  handleCancelForm();
+                } else {
+                  handleCancelForm();
+                  setShowAddForm(true);
+                }
+              }}
               className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/30"
             >
               <Plus className="w-4 h-4" />
@@ -109,7 +140,7 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
               key={p.id}
               onClick={() => {
                 setSelectedPlatform(p.id);
-                setShowAddForm(false);
+                handleCancelForm();
               }}
               className={`p-4 rounded-2xl border transition-all flex items-center justify-between text-left ${
                 isSelected
@@ -149,24 +180,47 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
         </div>
       )}
 
-      {/* Tutorial Card */}
+      {/* Detailed Token Guide Card */}
       {showTutorial && selectedPlatform === 'facebook' && (
         <div className="p-6 rounded-2xl bg-slate-900 border border-indigo-500/30 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-              <Facebook className="w-4 h-4 text-blue-400" />
-              <span>3-Minute Guide: Getting your Facebook Page ID & Access Token</span>
+              <KeyRound className="w-4 h-4 text-indigo-400" />
+              <span>Step-by-Step Guide: Connecting Your Facebook Page</span>
             </h3>
             <button onClick={() => setShowTutorial(false)} className="text-xs text-slate-500 hover:text-white">
               Close
             </button>
           </div>
-          <ol className="list-decimal list-inside space-y-2 text-xs text-slate-300 leading-relaxed">
-            <li>Open your Facebook Page in your browser and go to <strong>About -&gt; Page transparency</strong> to copy your numeric <strong>Page ID</strong>.</li>
-            <li>Go to <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" className="text-indigo-400 underline inline-flex items-center space-x-1"><span>Meta Graph API Explorer</span><ExternalLink className="w-3 h-3" /></a>.</li>
-            <li>Select your Meta App, choose your Facebook Page in the dropdown, and check permissions: <code className="bg-slate-800 px-1 py-0.5 rounded text-indigo-300">pages_messaging</code> and <code className="bg-slate-800 px-1 py-0.5 rounded text-indigo-300">pages_manage_metadata</code>.</li>
-            <li>Click <strong>Generate Access Token</strong> and extend it to a <strong>Never-Expiring Long-Lived Token</strong> using the Access Token Debugger.</li>
-            <li>Paste your <strong>Page ID</strong> and <strong>Access Token</strong> below and save!</li>
+
+          <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-start space-x-2">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              <strong>Good News:</strong> You only need your <strong>Facebook Page ID</strong> and <strong>Page Access Token</strong> here. You do <em>not</em> need to enter Meta App ID or App Secret for your bot to chat!
+            </span>
+          </div>
+
+          <ol className="list-decimal list-inside space-y-2.5 text-xs text-slate-300 leading-relaxed">
+            <li>
+              <strong>Get your Page ID:</strong> Open your Facebook Page in a browser $\rightarrow$ go to <strong>About $\rightarrow$ Page transparency</strong> (or Page Settings) to copy the 15-16 digit numeric <strong>Page ID</strong>.
+            </li>
+            <li>
+              <strong>Generate Page Access Token:</strong> Go to the official{' '}
+              <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" className="text-indigo-400 underline inline-flex items-center space-x-1">
+                <span>Meta Graph API Explorer</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>. Select your Meta App, choose your Page under the <em>User or Page</em> dropdown, and ensure <code className="bg-slate-800 px-1 py-0.5 rounded text-indigo-300">pages_messaging</code> permission is selected.
+            </li>
+            <li>
+              <strong>Extend to Permanent Token:</strong> In{' '}
+              <a href="https://developers.facebook.com/tools/debug/accesstoken/" target="_blank" rel="noreferrer" className="text-indigo-400 underline inline-flex items-center space-x-1">
+                <span>Access Token Debugger</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>, paste your token and click <strong>Extend Access Token</strong> so it never expires.
+            </li>
+            <li>
+              <strong>Paste &amp; Save:</strong> Click <strong>Connect New Page</strong> below, paste your Page ID and Token, and you're ready!
+            </li>
           </ol>
         </div>
       )}
@@ -175,8 +229,19 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
       {selectedPlatform === 'facebook' && (
         <>
           {showAddForm && (
-            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800">
-              <h3 className="text-base font-bold text-white mb-4">Connect New Facebook Page</h3>
+            <div className="p-6 rounded-2xl bg-slate-900 border border-indigo-500/30 shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-white flex items-center space-x-2">
+                  <Facebook className="w-4 h-4 text-blue-400" />
+                  <span>{editingPageId ? 'Edit Facebook Page Details' : 'Connect New Facebook Page'}</span>
+                </h3>
+                {editingPageId && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-medium border border-amber-500/30">
+                    Editing Mode
+                  </span>
+                )}
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -200,11 +265,19 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
                     <input
                       type="text"
                       required
+                      disabled={!!editingPageId}
                       placeholder="e.g. 109827364512345"
                       value={pageId}
                       onChange={(e) => setPageId(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition"
+                      className={`w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition ${
+                        editingPageId ? 'opacity-60 cursor-not-allowed' : ''
+                      }`}
                     />
+                    {editingPageId && (
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Page ID is the unique database key and cannot be altered while editing.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -240,7 +313,7 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
                 <div className="flex justify-end space-x-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => setShowAddForm(false)}
+                    onClick={handleCancelForm}
                     className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition"
                   >
                     Cancel
@@ -250,7 +323,9 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
                     disabled={loading}
                     className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/30 disabled:opacity-50"
                   >
-                    {loading ? 'Connecting...' : 'Save & Connect Page'}
+                    {loading 
+                      ? (editingPageId ? 'Updating...' : 'Connecting...') 
+                      : (editingPageId ? 'Update Page Details' : 'Save & Connect Page')}
                   </button>
                 </div>
               </form>
@@ -295,10 +370,17 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
                       </p>
                     </div>
 
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleStartEdit(page)}
+                        className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 transition"
+                        title="Edit Page Credentials"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => onDeletePage(page.page_id)}
-                        className="p-2 rounded-xl text-rose-400 hover:bg-rose-500/10 transition"
+                        className="p-2.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition"
                         title="Disconnect Page"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -335,14 +417,10 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
           <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto text-emerald-400">
             <MessageCircle className="w-7 h-7" />
           </div>
-          <h3 className="text-lg font-bold text-white">WhatsApp Cloud API Bot</h3>
+          <h3 className="text-lg font-bold text-white">WhatsApp Cloud API Automation</h3>
           <p className="text-sm text-slate-400 max-w-lg mx-auto">
-            Automate 24/7 customer sales and order updates directly on WhatsApp using official Meta WhatsApp Cloud API credentials.
+            Send automated order notifications, catalog responses, and interactive button replies on WhatsApp using the Meta Cloud API.
           </p>
-          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
-            <Sparkles className="w-4 h-4" />
-            <span>Multi-tenant Phone Number ID &amp; WABA Support</span>
-          </div>
         </div>
       )}
 
@@ -352,17 +430,12 @@ export default function SocialMediaManager({ pages = [], onSavePage, onDeletePag
           <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto text-sky-400">
             <Linkedin className="w-7 h-7" />
           </div>
-          <h3 className="text-lg font-bold text-white">LinkedIn Company Page Automation</h3>
+          <h3 className="text-lg font-bold text-white">LinkedIn Outreach &amp; Post Automation</h3>
           <p className="text-sm text-slate-400 max-w-lg mx-auto">
-            Connect your LinkedIn Organization Page to automate B2B lead generation, publish scheduled posts, and capture high-ticket consulting leads.
+            Schedule corporate updates, multi-image articles, and auto-reply to inbound networking messages.
           </p>
-          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs font-semibold">
-            <Sparkles className="w-4 h-4" />
-            <span>Scheduled Post Automation &amp; Lead Ingestion Ready</span>
-          </div>
         </div>
       )}
     </div>
   );
 }
-
