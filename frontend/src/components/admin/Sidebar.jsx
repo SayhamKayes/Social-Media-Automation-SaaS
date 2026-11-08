@@ -1,10 +1,19 @@
 import React from 'react';
-import { LayoutDashboard, Facebook, Bot, ShoppingBag, MessageSquareCode, LifeBuoy } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  Share2, 
+  KeyRound, 
+  Bot, 
+  ShoppingBag, 
+  MessageSquareCode, 
+  LifeBuoy 
+} from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, ordersCount = 0 }) {
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'facebook', label: 'Facebook Pages', icon: Facebook },
+    { id: 'social-media', label: 'Social Media', icon: Share2 },
+    { id: 'api-integrations', label: 'Social Media APIs', icon: KeyRound },
     { id: 'ai-config', label: 'AI Agent & Prompts', icon: Bot },
     { id: 'orders', label: 'Orders & Leads', icon: ShoppingBag, badge: ordersCount > 0 ? ordersCount : null },
     { id: 'simulator', label: 'Chat Simulator', icon: MessageSquareCode },
@@ -52,11 +61,10 @@ export default function Sidebar({ activeTab, setActiveTab, ordersCount = 0 }) {
             <span>Need Help?</span>
           </div>
           <p className="text-[11px] text-slate-400 leading-normal">
-            Check the setup tutorial in the Facebook tab to link your Page ID & Access Token.
+            Configure your accounts in Social Media and grab webhook endpoints from Social Media APIs.
           </p>
         </div>
       </div>
     </aside>
   );
 }
-

@@ -5,12 +5,14 @@ import Features from './components/landing/Features';
 import HowItWorks from './components/landing/HowItWorks';
 import Pricing from './components/landing/Pricing';
 import Footer from './components/landing/Footer';
+import BackToTop from './components/landing/BackToTop';
 import AuthModal from './components/auth/AuthModal';
 
 import AdminNavbar from './components/admin/AdminNavbar';
 import Sidebar from './components/admin/Sidebar';
 import DashboardOverview from './components/admin/DashboardOverview';
-import FacebookConnect from './components/admin/FacebookConnect';
+import SocialMediaManager from './components/admin/SocialMediaManager';
+import ApiIntegrations from './components/admin/ApiIntegrations';
 import AIAgentConfig from './components/admin/AIAgentConfig';
 import OrdersManager from './components/admin/OrdersManager';
 import TestChatSimulator from './components/admin/TestChatSimulator';
@@ -18,8 +20,13 @@ import TestChatSimulator from './components/admin/TestChatSimulator';
 import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('landing'); // 'landing' | 'dashboard'
-  const [activeAdminTab, setActiveAdminTab] = useState('overview');
+  // Check initial path on page load (/dashboard or /admin)
+  const isDashboardPath = () => {
+    return window.location.pathname.startsWith('/dashboard') || window.location.pathname.startsWith('/admin');
+  };
+
+  const [currentView, setCurrentView] = useState(isDashboardPath() ? 'dashboard' : 'landing');
+  const [activeAdminTab, setActiveAdminTab] = useState('overview'); // 'overview' | 'social-media' | 'api-integrations' | 'ai-config' | 'orders' | 'simulator'
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState('signup');
   const [user, setUser] = useState(null);
@@ -28,6 +35,30 @@ export default function App() {
   const [pages, setPages] = useState([]);
   const [orders, setOrders] = useState([]);
 
+  // URL Path Synchronizer helper
+  const navigateTo = (view) => {
+    setCurrentView(view);
+    if (view === 'dashboard') {
+      window.history.pushState({ view: 'dashboard' }, '', '/dashboard');
+    } else {
+      window.history.pushState({ view: 'landing' }, '', '/');
+    }
+  };
+
+  // Listen to browser Back/Forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      if (isDashboardPath()) {
+        setCurrentView('dashboard');
+      } else {
+        setCurrentView('landing');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Check Supabase Auth state on mount
   useEffect(() => {
     if (isSupabaseConfigured()) {
@@ -35,6 +66,13 @@ export default function App() {
         if (session?.user) {
           setUser(session.user);
           loadUserData(session.user.id);
+        } else {
+          loadMockData();
+          if (isDashboardPath()) {
+            // Auto-open login if user visited /dashboard without an active session
+            setIsAuthModalOpen(true);
+            setAuthMode('login');
+          }
         }
       });
 
@@ -44,14 +82,12 @@ export default function App() {
           loadUserData(session.user.id);
         } else {
           setUser(null);
-          setPages([]);
-          setOrders([]);
+          loadMockData();
         }
       });
 
       return () => subscription?.unsubscribe();
     } else {
-      // Default initial mock data for immediate exploration
       loadMockData();
     }
   }, []);
@@ -75,7 +111,8 @@ export default function App() {
     setOrders([
       {
         id: "1",
-        order_id: "ORD-9821",
+        order_id: "ORD-FB-9821",
+        channel: "facebook",
         customer_name: "Tanvir Ahmed",
         phone_number: "+8801712345678",
         email: "tanvir@example.com",
@@ -86,6 +123,36 @@ export default function App() {
         order_status: "Confirmed",
         customer_requirements: "Wants an AI chatbot for Facebook page.",
         created_at: new Date().toISOString()
+      },
+      {
+        id: "2",
+        order_id: "ORD-IG-4412",
+        channel: "instagram",
+        customer_name: "Samantha Roy",
+        phone_number: "+8801987654321",
+        email: "samantha@gmail.com",
+        selected_package: "E-Commerce Web Package",
+        selected_addons: "Payment Gateway, SEO Package",
+        total_amount_bdt: 35000,
+        total_amount_usd: 300,
+        order_status: "Confirmed",
+        customer_requirements: "Fashion boutique looking for online checkout.",
+        created_at: new Date(Date.now() - 3600000 * 5).toISOString()
+      },
+      {
+        id: "3",
+        order_id: "ORD-WA-7730",
+        channel: "whatsapp",
+        customer_name: "Imran Hossain",
+        phone_number: "+8801811223344",
+        email: "imran@techbd.org",
+        selected_package: "Standard Corporate Website",
+        selected_addons: "Domain & 1 Year Hosting",
+        total_amount_bdt: 18000,
+        total_amount_usd: 155,
+        order_status: "Processing",
+        customer_requirements: "Corporate portfolio for logistics agency.",
+        created_at: new Date(Date.now() - 3600000 * 24).toISOString()
       }
     ]);
   };
@@ -124,7 +191,7 @@ export default function App() {
 
   const handleAuthSuccess = (authenticatedUser) => {
     setUser(authenticatedUser);
-    setCurrentView('dashboard');
+    navigateTo('dashboard');
     if (isSupabaseConfigured()) {
       loadUserData(authenticatedUser.id);
     }
@@ -135,7 +202,7 @@ export default function App() {
       await supabase.auth.signOut();
     }
     setUser(null);
-    setCurrentView('landing');
+    navigateTo('landing');
   };
 
   // Business Page Operations
@@ -207,22 +274,23 @@ export default function App() {
           <Navbar
             user={user}
             onOpenAuth={handleOpenAuth}
-            onGoToDashboard={() => setCurrentView('dashboard')}
+            onGoToDashboard={() => navigateTo('dashboard')}
           />
           <main className="flex-grow">
-            <Hero onGetStarted={() => user ? setCurrentView('dashboard') : handleOpenAuth('signup')} />
+            <Hero onGetStarted={() => user ? navigateTo('dashboard') : handleOpenAuth('signup')} />
             <Features />
             <HowItWorks />
-            <Pricing onSelectPlan={() => user ? setCurrentView('dashboard') : handleOpenAuth('signup')} />
+            <Pricing onSelectPlan={() => user ? navigateTo('dashboard') : handleOpenAuth('signup')} />
           </main>
           <Footer />
+          <BackToTop />
         </>
       ) : (
         <div className="min-h-screen flex flex-col bg-slate-950">
           <AdminNavbar
             user={user}
             onLogout={handleLogout}
-            onGoToLanding={() => setCurrentView('landing')}
+            onGoToLanding={() => navigateTo('landing')}
           />
           <div className="flex flex-1 overflow-hidden">
             <Sidebar
@@ -238,11 +306,16 @@ export default function App() {
                   onNavigate={setActiveAdminTab}
                 />
               )}
-              {activeAdminTab === 'facebook' && (
-                <FacebookConnect
+              {activeAdminTab === 'social-media' && (
+                <SocialMediaManager
                   pages={pages}
                   onSavePage={handleSavePage}
                   onDeletePage={handleDeletePage}
+                />
+              )}
+              {activeAdminTab === 'api-integrations' && (
+                <ApiIntegrations
+                  pages={pages}
                 />
               )}
               {activeAdminTab === 'ai-config' && (
@@ -276,4 +349,3 @@ export default function App() {
     </div>
   );
 }
-

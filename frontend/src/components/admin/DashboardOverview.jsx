@@ -1,5 +1,15 @@
 import React from 'react';
-import { Facebook, ShoppingBag, MessageSquare, ArrowUpRight, CheckCircle, Zap } from 'lucide-react';
+import { 
+  Facebook, 
+  ShoppingBag, 
+  MessageSquare, 
+  ArrowUpRight, 
+  CheckCircle, 
+  Zap, 
+  Share2, 
+  KeyRound,
+  Sparkles
+} from 'lucide-react';
 
 export default function DashboardOverview({ pages = [], orders = [], onNavigate }) {
   const activePages = pages.filter(p => p.is_active);
@@ -7,17 +17,17 @@ export default function DashboardOverview({ pages = [], orders = [], onNavigate 
 
   const stats = [
     {
-      title: "Connected Pages",
+      title: "Active Channels",
       value: activePages.length,
-      change: `${pages.length} total`,
-      icon: Facebook,
+      change: "Facebook & Instagram",
+      icon: Share2,
       color: "text-blue-400",
       bg: "bg-blue-500/10"
     },
     {
       title: "Secured Orders",
       value: orders.length,
-      change: "Auto-confirmed",
+      change: "Across all channels",
       icon: ShoppingBag,
       color: "text-emerald-400",
       bg: "bg-emerald-500/10"
@@ -45,7 +55,7 @@ export default function DashboardOverview({ pages = [], orders = [], onNavigate 
       <div>
         <h2 className="text-2xl font-bold text-white tracking-tight">Dashboard Overview</h2>
         <p className="text-sm text-slate-400 mt-1">
-          Monitor your active Facebook pages, AI automation health, and incoming customer orders.
+          Monitor your active social media channels, multi-tenant automated replies, and incoming customer leads.
         </p>
       </div>
 
@@ -72,39 +82,47 @@ export default function DashboardOverview({ pages = [], orders = [], onNavigate 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 p-6 rounded-2xl bg-slate-900 border border-slate-800">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-white">Active Facebook Pages</h3>
+            <h3 className="text-base font-bold text-white flex items-center space-x-2">
+              <Share2 className="w-4 h-4 text-indigo-400" />
+              <span>Connected Social Media Accounts</span>
+            </h3>
             <button
-              onClick={() => onNavigate('facebook')}
+              onClick={() => onNavigate('social-media')}
               className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center space-x-1"
             >
-              <span>Manage Pages</span>
+              <span>Manage Channels</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {pages.length === 0 ? (
             <div className="text-center py-10 border border-dashed border-slate-800 rounded-xl">
-              <Facebook className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-slate-300">No Facebook Pages connected yet</p>
-              <p className="text-xs text-slate-500 mt-1">Connect your first page to start automating replies.</p>
+              <Share2 className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-300">No Social Media Accounts Connected</p>
+              <p className="text-xs text-slate-500 mt-1">Connect your Facebook, Instagram, or WhatsApp accounts.</p>
               <button
-                onClick={() => onNavigate('facebook')}
+                onClick={() => onNavigate('social-media')}
                 className="mt-4 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition"
               >
-                Connect Facebook Page
+                Connect Channels
               </button>
             </div>
           ) : (
             <div className="space-y-3">
               {pages.map((page, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800">
-                  <div>
-                    <p className="text-sm font-bold text-white">{page.page_name}</p>
-                    <p className="text-xs text-slate-500 font-mono">Page ID: {page.page_id}</p>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                      <Facebook className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white">{page.page_name}</p>
+                      <p className="text-xs text-slate-500 font-mono">Page ID: {page.page_id}</p>
+                    </div>
                   </div>
                   <span className="inline-flex items-center space-x-1 text-xs text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full">
                     <CheckCircle className="w-3.5 h-3.5" />
-                    <span>Active & Ready</span>
+                    <span>Active &amp; Ready</span>
                   </span>
                 </div>
               ))}
@@ -115,24 +133,24 @@ export default function DashboardOverview({ pages = [], orders = [], onNavigate 
         {/* Live Setup Guide */}
         <div className="p-6 rounded-2xl bg-gradient-to-b from-indigo-950/40 to-slate-900 border border-indigo-500/20">
           <h3 className="text-base font-bold text-white mb-2">Automation Checklist</h3>
-          <p className="text-xs text-slate-400 mb-4">Complete these steps to ensure end-to-end reliability:</p>
+          <p className="text-xs text-slate-400 mb-4">Steps to launch your multi-tenant bot:</p>
 
           <div className="space-y-3 text-xs text-slate-300">
             <div className="flex items-start space-x-2">
               <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[10px] mt-0.5">✓</span>
-              <span>Supabase Database & RLS policies enabled</span>
+              <span>Supabase Database &amp; RLS policies active</span>
             </div>
             <div className="flex items-start space-x-2">
               <span className="w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-[10px] mt-0.5">2</span>
-              <span>Deploy n8n on Render free tier with healthz cron keep-alive</span>
+              <span>Connect Facebook, Instagram, or WhatsApp accounts</span>
             </div>
             <div className="flex items-start space-x-2">
               <span className="w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-[10px] mt-0.5">3</span>
-              <span>Connect Facebook Page ID & Access Token</span>
+              <span>Configure AI Consultant tone &amp; knowledge base</span>
             </div>
             <div className="flex items-start space-x-2">
               <span className="w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-[10px] mt-0.5">4</span>
-              <span>Test conversation flow in the Chat Simulator</span>
+              <span>Test live sales conversation in Chat Simulator</span>
             </div>
           </div>
 
@@ -147,4 +165,3 @@ export default function DashboardOverview({ pages = [], orders = [], onNavigate 
     </div>
   );
 }
-
