@@ -53,3 +53,13 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Private Backend, Workflows & Local Scripts (Kept safely on your local machine)
+database/
+n8n/
+huggingface/
+schema.sql
+docker-compose.yml
+Caddyfile
+run_frontend.bat
+/Facebook*.json
