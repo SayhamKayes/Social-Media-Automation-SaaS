@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, Save, FileSpreadsheet, Sparkles, CheckCircle2, AlertCircle, BookOpen } from 'lucide-react';
 
-export default function AIAgentConfig({ pages = [], onUpdatePageConfig }) {
+export default function AIAgentConfig({ pages = [], userProfile = null, onUpdatePageConfig, onUpgradePlan }) {
   const [selectedPageId, setSelectedPageId] = useState(pages[0]?.page_id || '');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [knowledgeBase, setKnowledgeBase] = useState('');
@@ -11,6 +11,15 @@ export default function AIAgentConfig({ pages = [], onUpdatePageConfig }) {
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  const expiresAt = userProfile?.subscription_expires_at 
+    ? new Date(userProfile.subscription_expires_at) 
+    : userProfile?.created_at 
+      ? new Date(new Date(userProfile.created_at).getTime() + 30 * 24 * 60 * 60 * 1000)
+      : null;
+  const isSubscriptionExpired = expiresAt ? (new Date() > expiresAt) : false;
+  const isFreeTrial = (userProfile?.plan_tier || 'free').toLowerCase() === 'free';
+  const isFreeTrialExpired = isFreeTrial && isSubscriptionExpired;
 
   // Update form fields when selected page changes
   useEffect(() => {
@@ -98,6 +107,32 @@ export default function AIAgentConfig({ pages = [], onUpdatePageConfig }) {
           Customize the personality, sales rules, and knowledge base for your AI sales consultant.
         </p>
       </div>
+
+      {/* 1-Month Free Trial Expired Warning */}
+      {isFreeTrialExpired && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-amber-200 shadow-xl">
+          <div className="flex items-start sm:items-center space-x-3">
+            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                1-Month Free Trial Has Expired (Payment Required)
+              </p>
+              <p className="text-xs text-amber-300/80 mt-0.5 leading-relaxed">
+                Your 30-day trial period has ended. Prompt configurations remain safely saved, but automated AI bot responses are suspended until a paid subscription package is activated.
+              </p>
+            </div>
+          </div>
+          {onUpgradePlan && (
+            <button
+              type="button"
+              onClick={onUpgradePlan}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shrink-0 transition"
+            >
+              Upgrade &amp; Pay Now
+            </button>
+          )}
+        </div>
+      )}
 
       {errorMsg && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-sm flex items-center space-x-2">
