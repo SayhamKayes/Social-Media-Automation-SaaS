@@ -62,4 +62,6 @@ schema.sql
 docker-compose.yml
 Caddyfile
 run_frontend.bat
+run_admin.bat
+run_all.bat
 /Facebook*.json
