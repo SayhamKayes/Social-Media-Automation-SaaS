@@ -8,21 +8,41 @@ import {
   Zap, 
   Share2, 
   KeyRound,
-  Sparkles
+  Sparkles,
+  ShieldAlert,
+  AlertCircle
 } from 'lucide-react';
 
-export default function DashboardOverview({ pages = [], orders = [], onNavigate }) {
-  const activePages = pages.filter(p => p.is_active);
+export default function DashboardOverview({ pages = [], orders = [], userProfile = null, onNavigate }) {
+  const isUserSuspended = userProfile?.status === 'suspended';
+  const expiresAt = userProfile?.subscription_expires_at 
+    ? new Date(userProfile.subscription_expires_at) 
+    : userProfile?.created_at 
+      ? new Date(new Date(userProfile.created_at).getTime() + 30 * 24 * 60 * 60 * 1000)
+      : null;
+  const isSubscriptionExpired = expiresAt ? (new Date() > expiresAt) : false;
+  const isFreeTrial = (userProfile?.plan_tier || 'free').toLowerCase() === 'free';
+  const isFreeTrialExpired = isFreeTrial && isSubscriptionExpired;
+
+  const activePages = pages.filter(p => p.is_active && !isUserSuspended && p.bot_status !== 'SUSPENDED' && !isSubscriptionExpired);
   const totalRevenue = orders.reduce((acc, curr) => acc + (Number(curr.total_amount_bdt) || 0), 0);
 
   const stats = [
     {
       title: "Active Channels",
-      value: activePages.length,
-      change: "Facebook & Instagram",
+      value: isUserSuspended 
+        ? "0 Active" 
+        : isFreeTrialExpired
+          ? "0 Active"
+          : `${activePages.length} Pages`,
+      change: isUserSuspended 
+        ? "Suspended by Admin" 
+        : isFreeTrialExpired
+          ? "Trial Expired (Pay Required)"
+          : "Facebook & Instagram",
       icon: Share2,
-      color: "text-blue-400",
-      bg: "bg-blue-500/10"
+      color: isUserSuspended ? "text-rose-400" : isFreeTrialExpired ? "text-amber-400" : "text-blue-400",
+      bg: isUserSuspended ? "bg-rose-500/10" : isFreeTrialExpired ? "bg-amber-500/10" : "bg-blue-500/10"
     },
     {
       title: "Secured Orders",
@@ -42,16 +62,113 @@ export default function DashboardOverview({ pages = [], orders = [], onNavigate 
     },
     {
       title: "AI Response Status",
-      value: "Online 24/7",
-      change: "Gemini 2.5 Flash",
+      value: isUserSuspended 
+        ? "HALTED" 
+        : isFreeTrialExpired
+          ? "TRIAL EXPIRED"
+          : isSubscriptionExpired 
+            ? "PAUSED" 
+            : "Online 24/7",
+      change: isUserSuspended 
+        ? "Admin Suspension Active" 
+        : isFreeTrialExpired
+          ? "Payment required to resume"
+          : isSubscriptionExpired 
+            ? "30-Day Period Expired" 
+            : "Gemini 2.5 Flash",
       icon: MessageSquare,
-      color: "text-indigo-400",
-      bg: "bg-indigo-500/10"
+      color: isUserSuspended 
+        ? "text-rose-400" 
+        : isFreeTrialExpired || isSubscriptionExpired
+          ? "text-amber-400" 
+          : "text-indigo-400",
+      bg: isUserSuspended 
+        ? "bg-rose-500/10" 
+        : isFreeTrialExpired || isSubscriptionExpired
+          ? "bg-amber-500/10" 
+          : "bg-indigo-500/10"
     }
   ];
 
   return (
     <div className="space-y-8">
+      {/* Top Banner Alert for Suspended Accounts */}
+      {isUserSuspended && (
+        <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-rose-300 shadow-xl">
+          <div className="flex items-start sm:items-center space-x-3">
+            <ShieldAlert className="w-6 h-6 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <p className="text-sm font-bold uppercase tracking-wider text-rose-300">
+                Account Suspended by Administrator
+              </p>
+              <p className="text-xs text-rose-300/80 mt-0.5">
+                Your entire multi-tenant tenant has been marked as suspended by a platform administrator. Incoming Messenger hooks and automated AI replies are completely halted.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate('profile')}
+            className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shrink-0 transition"
+          >
+            Review Profile
+          </button>
+        </div>
+      )}
+
+      {/* Top Banner Alert for Expired Free Trial */}
+      {isFreeTrialExpired && !isUserSuspended && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-amber-500/15 to-amber-950/30 border border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-amber-200 shadow-2xl">
+          <div className="flex items-start sm:items-center space-x-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-6 h-6 text-amber-400" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <p className="text-sm font-black uppercase tracking-wider text-amber-300">
+                  1-Month Free Trial Has Expired
+                </p>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                  Payment Required
+                </span>
+              </div>
+              <p className="text-xs text-amber-200/90 mt-1 leading-relaxed">
+                Your 30-day Free Trial period has ended and automated AI bot replies are now halted. To continue using the AutoReply system and reactivate your bots, please choose and pay for a subscription package.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate('profile')}
+            className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shrink-0 transition shadow-lg shadow-amber-500/30 flex items-center justify-center space-x-1.5 self-start sm:self-auto"
+          >
+            <span>Upgrade &amp; Pay Now</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Top Banner Alert for Expired Paid Subscriptions */}
+      {isSubscriptionExpired && !isFreeTrial && !isUserSuspended && (
+        <div className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-amber-200 shadow-xl">
+          <div className="flex items-start sm:items-center space-x-3">
+            <AlertCircle className="w-6 h-6 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <p className="text-sm font-bold uppercase tracking-wider text-amber-300">
+                30-Day Subscription Has Expired
+              </p>
+              <p className="text-xs text-amber-300/80 mt-0.5">
+                Your 30-day billing period has concluded. Autopilot replies are currently paused. Renew your subscription to immediately restore automated customer responses.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate('profile')}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shrink-0 transition"
+          >
+            Renew Plan
+          </button>
+        </div>
+      )}
+
       <div>
         <h2 className="text-2xl font-bold text-white tracking-tight">Dashboard Overview</h2>
         <p className="text-sm text-slate-400 mt-1">
@@ -109,23 +226,49 @@ export default function DashboardOverview({ pages = [], orders = [], onNavigate 
             </div>
           ) : (
             <div className="space-y-3">
-              {pages.map((page, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
-                      <Facebook className="w-4 h-4" />
+              {pages.map((page, idx) => {
+                const isItemSuspended = isUserSuspended || page.bot_status === 'SUSPENDED';
+
+                return (
+                  <div key={idx} className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                        <Facebook className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-white">{page.page_name}</p>
+                        <p className="text-xs text-slate-500 font-mono">Page ID: {page.page_id}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-white">{page.page_name}</p>
-                      <p className="text-xs text-slate-500 font-mono">Page ID: {page.page_id}</p>
-                    </div>
+
+                    {isItemSuspended ? (
+                      <span className="inline-flex items-center space-x-1 text-xs text-rose-400 font-medium bg-rose-500/15 border border-rose-500/30 px-2.5 py-1 rounded-full">
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                        <span>Suspended by Admin</span>
+                      </span>
+                    ) : isFreeTrialExpired ? (
+                      <span className="inline-flex items-center space-x-1 text-xs text-amber-400 font-medium bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-full">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>Free Trial Expired (Pay to Resume)</span>
+                      </span>
+                    ) : isSubscriptionExpired ? (
+                      <span className="inline-flex items-center space-x-1 text-xs text-amber-400 font-medium bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-full">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>Subscription Expired</span>
+                      </span>
+                    ) : page.is_active ? (
+                      <span className="inline-flex items-center space-x-1 text-xs text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        <span>Active &amp; Ready</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1 text-xs text-slate-400 font-medium bg-slate-800 px-2.5 py-1 rounded-full">
+                        <span>Paused</span>
+                      </span>
+                    )}
                   </div>
-                  <span className="inline-flex items-center space-x-1 text-xs text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full">
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    <span>Active &amp; Ready</span>
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
