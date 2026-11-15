@@ -1,11 +1,22 @@
 import React, { useState } from 'react';
-import { Send, Bot, User, RefreshCw, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Send, Bot, User, RefreshCw, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
 
-export default function TestChatSimulator({ selectedPage }) {
+export default function TestChatSimulator({ selectedPage, userProfile = null, onUpgradePlan }) {
+  const expiresAt = userProfile?.subscription_expires_at 
+    ? new Date(userProfile.subscription_expires_at) 
+    : userProfile?.created_at 
+      ? new Date(new Date(userProfile.created_at).getTime() + 30 * 24 * 60 * 60 * 1000)
+      : null;
+  const isSubscriptionExpired = expiresAt ? (new Date() > expiresAt) : false;
+  const isFreeTrial = (userProfile?.plan_tier || 'free').toLowerCase() === 'free';
+  const isFreeTrialExpired = isFreeTrial && isSubscriptionExpired;
+
   const [messages, setMessages] = useState([
     {
       sender: 'bot',
-      text: "Hello! Welcome to our sales desk. How can I help you today with our packages and services?"
+      text: isFreeTrialExpired 
+        ? "Notice: Your 1-Month Free Trial has expired. Automated AI responses are halted. Please upgrade to a paid package to test and deploy."
+        : "Hello! Welcome to our sales desk. How can I help you today with our packages and services?"
     }
   ]);
   const [inputText, setInputText] = useState('');
@@ -14,6 +25,16 @@ export default function TestChatSimulator({ selectedPage }) {
   const handleSend = (e) => {
     e.preventDefault();
     if (!inputText.trim()) return;
+
+    if (isFreeTrialExpired) {
+      setMessages((prev) => [
+        ...prev, 
+        { sender: 'user', text: inputText.trim() },
+        { sender: 'bot', text: "Service Halted: Your 1-Month Free Trial has ended. Please upgrade and pay for a package to reactivate AI sales responses." }
+      ]);
+      setInputText('');
+      return;
+    }
 
     const userMsg = inputText.trim();
     setMessages((prev) => [...prev, { sender: 'user', text: userMsg }]);
@@ -26,7 +47,7 @@ export default function TestChatSimulator({ selectedPage }) {
 
       const lower = userMsg.toLowerCase();
       if (lower.includes('price') || lower.includes('package') || lower.includes('cost')) {
-        botReply = "Our Web Development package starts from ৳15,000 / $150, and AI Integration starts from ৳25,000 / $220. Both include dedicated support and fast turnaround. Would you like to proceed with one of these?";
+        botReply = "Our Web Development package starts from ৳15,000, and AI Integration starts from ৳25,000. Both include dedicated support and fast turnaround. Would you like to proceed with one of these?";
       } else if (lower.includes('yes') || lower.includes('order') || lower.includes('confirm') || lower.includes('proceed') || lower.includes('ঠিক আছে')) {
         botReply = "Awesome! To confirm your order, could you please provide your:\n1. Full Name\n2. Phone Number\n3. Email Address\n\nOnce received, I will present a final summary for your verification.";
       } else if (lower.includes('017') || lower.includes('018') || lower.includes('019') || lower.includes('@')) {
@@ -64,6 +85,32 @@ export default function TestChatSimulator({ selectedPage }) {
           <span>Reset Chat</span>
         </button>
       </div>
+
+      {/* Free Trial Expired Banner */}
+      {isFreeTrialExpired && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-amber-200 shadow-xl max-w-2xl mx-auto">
+          <div className="flex items-start sm:items-center space-x-3">
+            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                1-Month Free Trial Expired (Payment Required)
+              </p>
+              <p className="text-xs text-amber-300/80 mt-0.5 leading-relaxed">
+                Your 30-day trial period has ended. Live prompt simulations and bot responses are paused until a subscription is activated.
+              </p>
+            </div>
+          </div>
+          {onUpgradePlan && (
+            <button
+              type="button"
+              onClick={onUpgradePlan}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shrink-0 transition"
+            >
+              Upgrade Plan
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="max-w-2xl mx-auto rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl flex flex-col h-[520px]">
         {/* Messenger Header */}
