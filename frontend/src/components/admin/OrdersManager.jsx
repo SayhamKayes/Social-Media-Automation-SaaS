@@ -10,13 +10,17 @@ import {
   Facebook, 
   Instagram, 
   MessageCircle, 
-  Globe 
+  Globe,
+  Trash2
 } from 'lucide-react';
+import ConfirmDeleteModal from './ConfirmDeleteModal';
 
-export default function OrdersManager({ orders = [] }) {
+export default function OrdersManager({ orders = [], onDeleteOrder }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedChannel, setSelectedChannel] = useState('ALL'); // 'ALL' | 'facebook' | 'instagram' | 'whatsapp' | 'web'
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [orderToDelete, setOrderToDelete] = useState(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Channel helper
   const getChannelBadge = (channel = 'facebook') => {
@@ -182,6 +186,7 @@ export default function OrdersManager({ orders = [] }) {
                   <th className="py-3.5 px-4">Total Amount</th>
                   <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4">Date</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 text-slate-300">
@@ -220,8 +225,7 @@ export default function OrdersManager({ orders = [] }) {
                       )}
                     </td>
                     <td className="py-4 px-4 font-bold text-white">
-                      {ord.total_amount_bdt ? `৳${Number(ord.total_amount_bdt).toLocaleString()}` : ''}
-                      {ord.total_amount_usd ? ` ($${ord.total_amount_usd})` : ''}
+                      {ord.total_amount_bdt ? `৳${Number(ord.total_amount_bdt).toLocaleString()}` : '৳0'}
                     </td>
                     <td className="py-4 px-4">
                       <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400">
@@ -232,6 +236,20 @@ export default function OrdersManager({ orders = [] }) {
                     <td className="py-4 px-4 text-slate-400 font-mono text-[11px]">
                       {ord.created_at ? new Date(ord.created_at).toLocaleDateString() : 'Today'}
                     </td>
+                    <td className="py-4 px-4 text-right">
+                      {onDeleteOrder && (
+                        <button
+                          onClick={() => {
+                            setOrderToDelete(ord);
+                            setIsDeleteModalOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-rose-400 transition"
+                          title="Delete Order Record"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -239,6 +257,24 @@ export default function OrdersManager({ orders = [] }) {
           </div>
         )}
       </div>
+      {/* Delete Order Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={isDeleteModalOpen}
+        title="Delete Order Record"
+        message={`Are you sure you want to permanently delete order "${orderToDelete?.order_id || 'this order'}" for customer "${orderToDelete?.customer_name || 'Guest'}"? This record will be removed from your store logs.`}
+        confirmText="Yes, Delete Order"
+        onConfirm={async () => {
+          if (orderToDelete && onDeleteOrder) {
+            await onDeleteOrder(orderToDelete.id || orderToDelete.order_id);
+          }
+          setIsDeleteModalOpen(false);
+          setOrderToDelete(null);
+        }}
+        onCancel={() => {
+          setIsDeleteModalOpen(false);
+          setOrderToDelete(null);
+        }}
+      />
     </div>
   );
 }
