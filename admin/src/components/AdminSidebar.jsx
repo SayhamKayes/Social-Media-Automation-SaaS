@@ -9,20 +9,24 @@ import {
   ShieldAlert,
   UserCog,
   MailCheck,
-  CreditCard
+  CreditCard,
+  FileCheck2,
+  Bot
 } from 'lucide-react';
 
-export default function AdminSidebar({ activeTab, onSelectTab, unreadTabs = {} }) {
+export default function AdminSidebar({ activeTab, onSelectTab, unreadTabs = {}, pendingPaymentsCount = 0 }) {
   const menuItems = [
-    { id: 'overview', name: 'Master Overview', icon: LayoutDashboard },
-    { id: 'users', name: 'User Management (CRM)', icon: Users },
-    { id: 'packages', name: 'Subscription Tiers', icon: Package },
-    { id: 'payment_gateway', name: 'Payment Gateway & MFS', icon: CreditCard },
-    { id: 'pages', name: 'Connected Pages', icon: Share2 },
+    { id: 'overview', name: 'Overview', icon: LayoutDashboard },
+    { id: 'users', name: 'User Management', icon: Users },
+    { id: 'pages', name: 'Connected Apps', icon: Share2 },
+    { id: 'ai_agents', name: 'AI Agents', icon: Bot },
     { id: 'orders', name: 'Global Orders & Leads', icon: ShoppingBag },
+    { id: 'payment_ledger', name: 'Payment Verification', icon: FileCheck2, countBadge: pendingPaymentsCount },
+    { id: 'payment_gateway', name: 'Payment Gateway & MFS', icon: CreditCard },
     { id: 'settings', name: 'Master APIs & Gateway', icon: KeyRound },
     { id: 'staff', name: 'Staff Access Control', icon: UserCog },
     { id: 'smtp', name: 'Admin Profile & SMTP', icon: MailCheck },
+    { id: 'packages', name: 'Subscription Tiers', icon: Package },
   ];
 
   return (
@@ -52,12 +56,19 @@ export default function AdminSidebar({ activeTab, onSelectTab, unreadTabs = {} }
                     <Icon className={`w-4 h-4 ${isActive ? 'text-purple-400' : 'text-slate-500'}`} />
                     <span>{item.name}</span>
                   </div>
-                  {hasUnread && (
-                    <span 
-                      className="w-2 h-2 rounded-full bg-purple-400 shadow-sm shadow-purple-400 animate-pulse" 
-                      title="New unread activity"
-                    />
-                  )}
+                  <div className="flex items-center space-x-1.5">
+                    {item.countBadge > 0 && !isActive && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        {item.countBadge}
+                      </span>
+                    )}
+                    {hasUnread && (
+                      <span 
+                        className="w-2 h-2 rounded-full bg-purple-400 shadow-sm shadow-purple-400 animate-pulse" 
+                        title="New unread activity"
+                      />
+                    )}
+                  </div>
                 </button>
               );
             })}
