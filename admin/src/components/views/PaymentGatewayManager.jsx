@@ -283,15 +283,15 @@ export default function PaymentGatewayManager() {
     const fakeTrxId = `${prefix}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
 
     const simRecord = {
-      order_id: `SUB-${Math.floor(1000 + Math.random() * 9000)}`,
+      order_id: `SUB-STARTER-${Math.floor(1000 + Math.random() * 9000)}`,
       customer_name: 'Super Admin Test Buyer',
       customer_phone: simPhone,
       payment_method: methodUpper,
       transaction_id: fakeTrxId,
       amount: Number(simAmount) || 1499,
       currency: 'BDT',
-      status: 'PAID',
-      notes: 'Executed via Super Admin Live Simulator',
+      status: methodUpper === 'SSLCOMMERZ' ? 'CONFIRMED' : 'PENDING',
+      notes: 'Plan: starter | Executed via Super Admin Live Simulator',
       created_at: new Date().toISOString()
     };
 
@@ -361,19 +361,6 @@ export default function PaymentGatewayManager() {
             }`}
           >
             Payment Channels
-          </button>
-          <button
-            onClick={() => setActiveSubTab('ledger')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ${
-              activeSubTab === 'ledger'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <span>TrxID Ledger</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-500/30 text-purple-200">
-              {transactions.length}
-            </span>
           </button>
           <button
             onClick={() => setActiveSubTab('simulator')}
