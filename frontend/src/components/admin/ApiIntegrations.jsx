@@ -32,9 +32,15 @@ export default function ApiIntegrations({ pages = [] }) {
 
   // User Config states
   const [webhookUrl, setWebhookUrl] = useState("https://social-automation-saas-dfg4.onrender.com/webhook/facebook-messenger-saas");
+  const [autoPostWebhookUrl, setAutoPostWebhookUrl] = useState(
+    () => localStorage.getItem('saas_autopost_webhook') || "https://social-automation-saas-dfg4.onrender.com/webhook/social-auto-post"
+  );
   const [verifyToken, setVerifyToken] = useState("socialsaas_secret");
   const [metaAppId, setMetaAppId] = useState("");
   const [metaAppSecret, setMetaAppSecret] = useState("");
+  const [whatsappWabaId, setWhatsappWabaId] = useState(() => localStorage.getItem('saas_waba_id') || "");
+  const [linkedinClientId, setLinkedinClientId] = useState(() => localStorage.getItem('saas_linkedin_client_id') || "");
+  const [linkedinClientSecret, setLinkedinClientSecret] = useState(() => localStorage.getItem('saas_linkedin_client_secret') || "");
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [isCustomOverride, setIsCustomOverride] = useState(false);
 
@@ -94,15 +100,23 @@ export default function ApiIntegrations({ pages = [] }) {
   const handleResetToDefaults = () => {
     localStorage.removeItem('saas_custom_override_active');
     localStorage.removeItem('saas_webhook_url');
+    localStorage.removeItem('saas_autopost_webhook');
     localStorage.removeItem('saas_verify_token');
     localStorage.removeItem('saas_meta_app_id');
     localStorage.removeItem('saas_meta_app_secret');
+    localStorage.removeItem('saas_waba_id');
+    localStorage.removeItem('saas_linkedin_client_id');
+    localStorage.removeItem('saas_linkedin_client_secret');
     localStorage.removeItem('saas_gemini_api_key');
 
     setWebhookUrl(platformDefaults.webhook_url || "https://social-automation-saas-dfg4.onrender.com/webhook/facebook-messenger-saas");
+    setAutoPostWebhookUrl("https://social-automation-saas-dfg4.onrender.com/webhook/social-auto-post");
     setVerifyToken(platformDefaults.verify_token || "socialsaas_secret");
     setMetaAppId(platformDefaults.meta_app_id || "");
     setMetaAppSecret(platformDefaults.meta_app_secret || "");
+    setWhatsappWabaId("");
+    setLinkedinClientId("");
+    setLinkedinClientSecret("");
     setGeminiApiKey(platformDefaults.gemini_api_key || "");
     setIsCustomOverride(false);
 
@@ -114,13 +128,17 @@ export default function ApiIntegrations({ pages = [] }) {
     e.preventDefault();
     localStorage.setItem('saas_custom_override_active', 'true');
     localStorage.setItem('saas_webhook_url', webhookUrl.trim());
+    localStorage.setItem('saas_autopost_webhook', autoPostWebhookUrl.trim());
     localStorage.setItem('saas_verify_token', verifyToken.trim());
     localStorage.setItem('saas_meta_app_id', metaAppId.trim());
     localStorage.setItem('saas_meta_app_secret', metaAppSecret.trim());
+    localStorage.setItem('saas_waba_id', whatsappWabaId.trim());
+    localStorage.setItem('saas_linkedin_client_id', linkedinClientId.trim());
+    localStorage.setItem('saas_linkedin_client_secret', linkedinClientSecret.trim());
     localStorage.setItem('saas_gemini_api_key', geminiApiKey.trim());
     setIsCustomOverride(true);
 
-    setSavedSuccess('Custom credentials and Webhook URL saved successfully!');
+    setSavedSuccess('Custom OAuth credentials and n8n Webhook URLs saved successfully!');
     setTimeout(() => setSavedSuccess(''), 3000);
   };
 
@@ -248,20 +266,20 @@ export default function ApiIntegrations({ pages = [] }) {
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-white flex items-center space-x-2">
               <KeyRound className="w-4 h-4 text-blue-400" />
-              <span>Owner Meta Developer App (Optional / Custom OAuth)</span>
+              <span>Custom Meta &amp; LinkedIn OAuth Credentials (Optional Override)</span>
             </h3>
             <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-medium">
               Optional Override
             </span>
           </div>
           <p className="text-xs text-slate-400">
-            Note: By default the platform master Meta App credentials handle webhooks. You can override with your custom App ID and Secret here if required.
+            Note: By default the platform master credentials handle webhooks. You can enter your custom Meta App ID, WhatsApp WABA ID, and LinkedIn OAuth Client ID/Secret below if you run dedicated custom apps.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                Meta App ID
+                Meta App ID (FB / IG / WA)
               </label>
               <input
                 type="text"
@@ -281,6 +299,47 @@ export default function ApiIntegrations({ pages = [] }) {
                 placeholder="••••••••••••••••••••••••••••••••"
                 value={metaAppSecret}
                 onChange={(e) => setMetaAppSecret(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                WhatsApp Business Account (WABA) ID
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 102938475610293"
+                value={whatsappWabaId}
+                onChange={(e) => setWhatsappWabaId(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800/60">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                LinkedIn OAuth Client ID
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 77x9k2m1p4q8w"
+                value={linkedinClientId}
+                onChange={(e) => setLinkedinClientId(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                LinkedIn OAuth Client Secret
+              </label>
+              <input
+                type="password"
+                placeholder="••••••••••••••••••••••••"
+                value={linkedinClientSecret}
+                onChange={(e) => setLinkedinClientSecret(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition"
               />
             </div>
