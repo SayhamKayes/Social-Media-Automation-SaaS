@@ -31,6 +31,9 @@ export default function AdminProfileSmtp({
   const [enableWelcome, setEnableWelcome] = useState(settings.smtp_enable_welcome !== 'false');
   const [enableOrderAlerts, setEnableOrderAlerts] = useState(settings.smtp_enable_orders !== 'false');
   const [enableReset, setEnableReset] = useState(settings.smtp_enable_reset !== 'false');
+  const [enable2FA, setEnable2FA] = useState(
+    () => settings.admin_2fa_enabled === 'true' || localStorage.getItem('saas_admin_2fa_enabled') === 'true'
+  );
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -45,7 +48,25 @@ export default function AdminProfileSmtp({
     if (settings.smtp_pass) setSmtpPass(settings.smtp_pass);
     if (settings.smtp_sender_name) setSenderName(settings.smtp_sender_name);
     if (settings.smtp_sender_email) setSenderEmail(settings.smtp_sender_email);
+    if (typeof settings.admin_2fa_enabled !== 'undefined') {
+      setEnable2FA(settings.admin_2fa_enabled === 'true');
+    }
   }, [settings]);
+
+  const handleToggle2FA = async () => {
+    const nextState = !enable2FA;
+    setEnable2FA(nextState);
+    localStorage.setItem('saas_admin_2fa_enabled', nextState ? 'true' : 'false');
+    if (onSaveSettings) {
+      await onSaveSettings({ admin_2fa_enabled: nextState ? 'true' : 'false' });
+    }
+    setToast(
+      nextState
+        ? '2-Step Email Verification (30s OTP) ENABLED for Super Admin Portal!'
+        : '2-Step Email Verification turned OFF.'
+    );
+    setTimeout(() => setToast(''), 4000);
+  };
 
   const handleSaveSmtp = async (e) => {
     e.preventDefault();
@@ -128,21 +149,48 @@ export default function AdminProfileSmtp({
             <div className="space-y-3 text-xs">
               <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
                 <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block">
-                  Master Ownership Email
+                  Admin Username (.env)
                 </span>
-                <span className="font-mono text-purple-300 font-semibold text-xs select-all">
-                  {adminUser?.email || 'sayhamkayes101@gmail.com'}
+                <span className="font-mono text-white font-semibold text-xs select-all">
+                  {import.meta.env.VITE_ADMIN_USERNAME || 'sayham_admin'}
                 </span>
               </div>
 
               <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
                 <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block">
-                  Access Level &amp; Security
+                  Master Ownership Email (.env)
                 </span>
-                <span className="text-emerald-400 font-medium flex items-center space-x-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Full RLS Bypass &amp; Root Database Control</span>
+                <span className="font-mono text-purple-300 font-semibold text-xs select-all">
+                  {import.meta.env.VITE_ADMIN_EMAIL || adminUser?.email || 'sayhamkayes101@gmail.com'}
                 </span>
+              </div>
+
+              {/* 2-Step Email Verification Toggle (30-Second OTP Expiry) */}
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-purple-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-white font-bold text-xs block">
+                      2-Step Email Verification
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      30-Second OTP Code on Login
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleToggle2FA}
+                    className={`px-3 py-1 rounded-lg text-[11px] font-bold transition ${
+                      enable2FA
+                        ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                        : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
+                    }`}
+                  >
+                    {enable2FA ? 'ENABLED (ON)' : 'DISABLED (OFF)'}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  When ON, logging into the Admin Portal with your Username &amp; Password will require a 6-digit email OTP code that expires strictly after 30 seconds.
+                </p>
               </div>
             </div>
           </div>
