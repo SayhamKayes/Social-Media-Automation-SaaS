@@ -16,10 +16,40 @@ export default function OverviewMetrics({
   users = [], 
   pages = [], 
   orders = [],
+  transactions = [],
   onNavigateTab
 }) {
-  const totalRevenueBDT = orders.reduce((acc, curr) => acc + (Number(curr.total_amount_bdt) || 0), 0);
-  const totalRevenueUSD = orders.reduce((acc, curr) => acc + (Number(curr.total_amount_usd) || 0), 0);
+  const isVerifiedTxn = (status = '') => {
+    const s = String(status).toUpperCase();
+    return s === 'CONFIRMED' || s === 'CONFIRMED_DELIVERED' || s === 'PAID';
+  };
+
+  const verifiedTransactions = transactions.filter(t => isVerifiedTxn(t.status));
+  const pendingTransactions = transactions.filter(t => String(t.status || 'PENDING').toUpperCase() === 'PENDING');
+
+  /* Verified Package Revenue from payment_transactions */
+  const verifiedPackageRevenue = verifiedTransactions.reduce(
+    (acc, curr) => acc + (Number(curr.amount) || 0),
+    0
+  );
+
+  /* Customer Chatbot Orders Revenue (excluding duplicate SUB- orders already in transactions) */
+  const txnOrderIds = new Set(transactions.map(t => t.order_id).filter(Boolean));
+  const nonDuplicateOrdersRevenue = orders
+    .filter(o => {
+      if (txnOrderIds.has(o.order_id)) return false;
+      const st = String(o.order_status || 'Confirmed').toLowerCase();
+      return !st.includes('pending') && !st.includes('rejected') && !st.includes('refund');
+    })
+    .reduce((acc, curr) => acc + (Number(curr.total_amount_bdt) || 0), 0);
+
+  const totalRevenueBDT = verifiedPackageRevenue + nonDuplicateOrdersRevenue;
+
+  /* Total Leads & Orders = all orders + any tenant signups not yet in orders */
+  const orderUserIds = new Set(orders.map(o => o.user_id).filter(Boolean));
+  const extraTenantLeads = users.filter(u => !orderUserIds.has(u.id)).length;
+  const totalLeadsAndOrdersCount = orders.length + extraTenantLeads;
+
   const activePages = pages.filter(p => p.is_active !== false).length;
 
   const cards = [
@@ -32,17 +62,17 @@ export default function OverviewMetrics({
       action: () => onNavigateTab('users')
     },
     {
-      title: 'Connected Social Pages',
+      title: 'Connected Apps',
       value: pages.length,
-      detail: `${activePages} currently running bots`,
+      detail: `${activePages} active social channels`,
       icon: Share2,
       color: 'from-purple-600/20 to-pink-600/20 border-purple-500/30 text-purple-400',
       action: () => onNavigateTab('pages')
     },
     {
       title: 'Total Platform Leads & Orders',
-      value: orders.length,
-      detail: 'Captured via Messenger bots',
+      value: totalLeadsAndOrdersCount,
+      detail: `${transactions.length} package orders • ${orders.length} leads`,
       icon: ShoppingBag,
       color: 'from-emerald-600/20 to-teal-600/20 border-emerald-500/30 text-emerald-400',
       action: () => onNavigateTab('orders')
@@ -50,10 +80,12 @@ export default function OverviewMetrics({
     {
       title: 'Gross Platform Sales',
       value: `৳${totalRevenueBDT.toLocaleString()}`,
-      detail: `${orders.length} total orders recorded`,
+      detail: pendingTransactions.length > 0
+        ? `${pendingTransactions.length} pending verification • ${verifiedTransactions.length} verified`
+        : `${verifiedTransactions.length} verified package sales`,
       icon: DollarSign,
       color: 'from-amber-600/20 to-orange-600/20 border-amber-500/30 text-amber-400',
-      action: () => onNavigateTab('orders')
+      action: () => onNavigateTab('payment_ledger')
     }
   ];
 
@@ -61,7 +93,7 @@ export default function OverviewMetrics({
     <div className="space-y-6">
       {/* Title */}
       <div>
-        <h2 className="text-2xl font-black text-white tracking-tight">Master Platform Overview</h2>
+        <h2 className="text-2xl font-black text-white tracking-tight">Platform Overview</h2>
         <p className="text-xs text-slate-400 mt-1">
           Real-time metrics, tenant health, and conversational commerce performance across all accounts.
         </p>
