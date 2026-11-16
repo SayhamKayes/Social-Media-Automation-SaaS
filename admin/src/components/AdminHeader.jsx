@@ -8,7 +8,16 @@ import {
   Layers
 } from 'lucide-react';
 
-export default function AdminHeader({ adminUser, onLogout }) {
+export default function AdminHeader({ adminUser, settings = {}, onLogout }) {
+  const isLocalHost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'));
+
+  const clientPortalUrl =
+    (settings?.live_client_host_url && settings.live_client_host_url.trim()) ||
+    import.meta.env.VITE_CLIENT_PORTAL_URL ||
+    (isLocalHost ? 'http://localhost:3000' : 'https://social-media-automation-saas.vercel.app');
+
   return (
     <header className="h-16 border-b border-purple-900/30 bg-slate-950/80 backdrop-blur-md sticky top-0 z-30 px-6 flex items-center justify-between select-none">
       <div className="flex items-center space-x-3">
@@ -35,12 +44,13 @@ export default function AdminHeader({ adminUser, onLogout }) {
           <span>Engine Status: Online</span>
         </div>
 
-        {/* Client Portal Clean Link */}
+        {/* Client Portal Live Link (Opens in New Window) */}
         <a 
-          href="http://localhost:3000" 
+          href={clientPortalUrl} 
           target="_blank" 
-          rel="noreferrer" 
+          rel="noopener noreferrer" 
           className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium border border-slate-800 transition"
+          title={`Open Client Portal (${clientPortalUrl})`}
         >
           <Layers className="w-3.5 h-3.5 text-indigo-400" />
           <span>Client Portal</span>
