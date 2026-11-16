@@ -7,7 +7,9 @@ import OverviewMetrics from './components/views/OverviewMetrics';
 import UsersManager from './components/views/UsersManager';
 import PackagesManager from './components/views/PackagesManager';
 import PaymentGatewayManager from './components/views/PaymentGatewayManager';
+import PaymentLedgerView, { TRANSACTION_STATUS_OPTIONS, extractPlanFromTransaction } from './components/views/PaymentLedgerView';
 import PagesOversight from './components/views/PagesOversight';
+import AdminAIAgentsManager from './components/views/AdminAIAgentsManager';
 import GlobalOrdersView from './components/views/GlobalOrdersView';
 import SystemSettings from './components/views/SystemSettings';
 import StaffAccessManager from './components/views/StaffAccessManager';
@@ -23,14 +25,17 @@ const INITIAL_DEFAULT_PACKAGES = [
     badge_color: 'bg-slate-800 text-slate-300',
     price_bdt: '৳0',
     price_usd: '$0',
-    period: 'forever',
+    period: '1 Month',
     pages_allowed: 1,
     description: 'Introductory plan for small pages testing AI sales automation.',
     features: [
-      '1 Facebook Business Page',
-      'Standard Google Gemini 1.5 Flash AI',
-      'Basic Product Catalog & FAQ lookup',
-      'Standard Messenger Support'
+      'Connect Account: 1 Social Account (FB)',
+      'Message Credit: 5K / Month',
+      'Bot AI Token: 50K / Month',
+      'Social Auto-Post: 5 / Month',
+      'Google Gemini AI Sales Consultant',
+      'Google Sheets Product & FAQ Lookup',
+      'Automated Messenger Order Capture'
     ],
     is_popular: false,
     display_order: 1
@@ -46,11 +51,13 @@ const INITIAL_DEFAULT_PACKAGES = [
     pages_allowed: 3,
     description: 'Ideal for independent shops and boutique ecommerce brands.',
     features: [
-      'Up to 3 Connected Pages (FB & Instagram)',
-      'Unlimited AI Messenger Inquiries',
-      'Custom Sales Consultant Personality',
-      'Automated Google Sheets Order Capture',
-      'Basic Analytics & Lead Export'
+      'Connect Account: 3 Social Accounts (FB & IG)',
+      'Message Credit: 50K / Month',
+      'Bot AI Token: 500K / Month',
+      'Social Auto-Post: 20 / Month',
+      'Messenger & Instagram DM Order Capture',
+      'PC Photo to Google Drive & Sheet Auto-Sync',
+      'Automated Sales Consultant Funnel'
     ],
     is_popular: true,
     display_order: 2
@@ -66,12 +73,13 @@ const INITIAL_DEFAULT_PACKAGES = [
     pages_allowed: 10,
     description: 'High-volume businesses needing multi-channel auto-sales bots.',
     features: [
-      'Up to 10 Connected Business Pages',
-      'Facebook, Instagram & WhatsApp Ready',
-      'Custom Knowledge Base & Product Engines',
-      'Direct WhatsApp Order Notification Dispatch',
-      'Dedicated RLS Database Isolation',
-      'Priority AI Token Execution'
+      'Connect Account: 10 Social Accounts (FB, IG, WA, LinkedIn)',
+      'Message Credit: 250K / Month',
+      'Bot AI Token: 2.5M / Month',
+      'Social Auto-Post: 60 / Month',
+      'Omnichannel Messenger, IG & WhatsApp Order Panel',
+      'PC Photo to Google Drive & Sheet Auto-Post',
+      'Priority Gemini AI Response Speed'
     ],
     is_popular: false,
     display_order: 3
@@ -87,12 +95,14 @@ const INITIAL_DEFAULT_PACKAGES = [
     pages_allowed: 9999,
     description: 'For digital agencies managing dozens of client brand pages.',
     features: [
-      'Unlimited Connected Social Accounts',
-      'Full Multi-Tenant Sub-Client Management',
-      'Custom System Prompt Library Presets',
-      'Master Lead Audit & CRM Integration',
-      '24/7 Priority VIP Uptime Guarantee',
-      'Dedicated Workflow Tuning'
+      'Connect Account: Unlimited Social Accounts',
+      'Message Credit: 10M / Month',
+      'Bot AI Token: 10M / Month',
+      'Social Auto-Post: Unlimited / Month',
+      'Manage Unlimited Client Brand Pages & Prompts',
+      'Custom Gemini, Meta & LinkedIn API Key Override',
+      'Omnichannel Orders & Leads Export (FB, IG, WA)',
+      '24/7 Priority VIP Uptime & Workflow Support'
     ],
     is_popular: false,
     display_order: 4
@@ -107,13 +117,14 @@ const INITIAL_MOCK_ORDERS = [];
 
 export default function App() {
   const [adminUser, setAdminUser] = useState({
-    email: 'sayhamkayes101@gmail.com',
+    email: import.meta.env.VITE_ADMIN_EMAIL || 'sayhamkayes101@gmail.com',
+    username: import.meta.env.VITE_ADMIN_USERNAME || 'sayham_admin',
     role: 'super_admin',
     full_name: 'Sayham Kayes'
   });
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(true);
   
-  /* Default active tab is Master Overview as requested */
+  /* Default active tab is Overview */
   const [activeTab, setActiveTab] = useState('overview');
   
   /* Unread Notification Dots State (disappears when tab is opened) */
@@ -121,24 +132,34 @@ export default function App() {
     users: false,
     pages: false,
     orders: false,
+    payment_ledger: false,
     staff: false
   });
+  const [ledgerVisited, setLedgerVisited] = useState(false);
 
   const handleSelectTab = (tabId) => {
     setActiveTab(tabId);
     setUnreadTabs(prev => ({ ...prev, [tabId]: false }));
+    if (tabId === 'payment_ledger') {
+      setLedgerVisited(true);
+    }
   };
   
   const [users, setUsers] = useState(INITIAL_MOCK_USERS);
   const [packages, setPackages] = useState(INITIAL_DEFAULT_PACKAGES);
   const [pages, setPages] = useState(INITIAL_MOCK_PAGES);
   const [orders, setOrders] = useState(INITIAL_MOCK_ORDERS);
+  const [transactions, setTransactions] = useState([]);
   const [settings, setSettings] = useState({
     meta_app_id: '',
     meta_app_secret: '',
     gemini_api_key: '',
     webhook_url: 'https://social-automation-saas-dfg4.onrender.com/webhook/facebook-messenger-saas',
+    autopost_webhook_url: 'https://social-automation-saas-dfg4.onrender.com/webhook/social-auto-post',
     verify_token: 'socialsaas_secret',
+    live_client_host_url: import.meta.env.VITE_CLIENT_PORTAL_URL || '',
+    live_admin_host_url: import.meta.env.VITE_ADMIN_PORTAL_URL || '',
+    admin_2fa_enabled: 'false',
     smtp_host: 'smtp.gmail.com',
     smtp_port: '587',
     smtp_user: '',
@@ -170,7 +191,25 @@ export default function App() {
         .order('display_order', { ascending: true });
 
       if (!pkgsErr && dbPackages && dbPackages.length > 0) {
-        setPackages(dbPackages);
+        const hasLegacy = dbPackages.some(pkg => {
+          const feats = Array.isArray(pkg.features) ? pkg.features.join(' ') : '';
+          return (
+            feats.includes('Sub-Client Management') ||
+            feats.includes('Master Lead Audit') ||
+            feats.includes('Knowledge Library') ||
+            feats.includes('Knowledge Packs') ||
+            feats.includes('1K / Month') ||
+            (pkg.id === 'agency' && feats.includes('1M / Month')) ||
+            !feats.includes('Connect Account:')
+          );
+        });
+
+        if (hasLegacy) {
+          await supabase.from('subscription_packages').upsert(INITIAL_DEFAULT_PACKAGES, { onConflict: 'id' });
+          setPackages(INITIAL_DEFAULT_PACKAGES);
+        } else {
+          setPackages(dbPackages);
+        }
       }
 
       /* 2. Fetch user profiles */
@@ -203,7 +242,17 @@ export default function App() {
         setOrders(dbOrders);
       }
 
-      /* 5. Fetch platform settings */
+      /* 5. Fetch payment transactions */
+      const { data: dbTxns, error: txnsErr } = await supabase
+        .from('payment_transactions')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!txnsErr && dbTxns) {
+        setTransactions(dbTxns);
+      }
+
+      /* 6. Fetch platform settings */
       const { data: dbSettings, error: settingsErr } = await supabase
         .from('platform_settings')
         .select('*');
@@ -228,7 +277,7 @@ export default function App() {
 
     if (!isSupabaseConfigured()) return;
 
-    /* Listen for live user signups, page connections, and incoming orders */
+    /* Listen for live user signups, page connections, orders, and payment transactions */
     const channel = supabase
       .channel('realtime:admin_dashboard')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, (payload) => {
@@ -248,6 +297,16 @@ export default function App() {
         if (payload.eventType === 'INSERT') {
           setUnreadTabs(prev => ({ ...prev, orders: true }));
         }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_transactions' }, (payload) => {
+        fetchData();
+        if (payload.eventType === 'INSERT') {
+          setUnreadTabs(prev => ({ ...prev, payment_ledger: true }));
+          setLedgerVisited(false);
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'platform_settings' }, () => {
+        fetchData();
       })
       .subscribe();
 
@@ -344,10 +403,14 @@ export default function App() {
 
   /* Action: Reset User Password */
   const handleResetUserPassword = async (userId, email) => {
+    const clientRedirect =
+      settings?.live_client_host_url ||
+      import.meta.env.VITE_CLIENT_PORTAL_URL ||
+      'http://localhost:3000';
     if (isSupabaseConfigured()) {
       try {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: 'http://localhost:3000'
+          redirectTo: clientRedirect
         });
         if (error) throw error;
         showToast(`Password recovery link dispatched to ${email}`);
@@ -457,6 +520,203 @@ export default function App() {
     }
   };
 
+  /* Action: Update Package Payment Verification Status & Sync User CRM + Global Orders */
+  const handleUpdateTransactionStatus = async (txn, nextStatus) => {
+    const statusOpt = TRANSACTION_STATUS_OPTIONS.find(o => o.value === nextStatus) || {
+      value: nextStatus,
+      label: nextStatus,
+      orderLabel: nextStatus
+    };
+
+    /* 1. Update local transactions state */
+    setTransactions(prev =>
+      prev.map(t => (t.id === txn.id ? { ...t, status: nextStatus } : t))
+    );
+
+    /* 2. Update corresponding order in Global Orders & Leads state */
+    setOrders(prev =>
+      prev.map(o =>
+        o.order_id === txn.order_id ? { ...o, order_status: statusOpt.orderLabel } : o
+      )
+    );
+
+    const planMeta = extractPlanFromTransaction(txn);
+    const isApproved = nextStatus === 'CONFIRMED' || nextStatus === 'CONFIRMED_DELIVERED' || nextStatus === 'PAID';
+    const isRejectedOrPending = nextStatus === 'REJECTED' || nextStatus === 'REFUNDED' || nextStatus === 'PENDING';
+
+    /* 3. Update local users CRM state */
+    if (txn.user_id) {
+      const now = new Date();
+      const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      setUsers(prev =>
+        prev.map(u => {
+          if (u.id !== txn.user_id) return u;
+          if (isApproved) {
+            return {
+              ...u,
+              plan_tier: planMeta.planId,
+              max_pages: planMeta.maxPages,
+              status: 'active',
+              subscription_started_at: now.toISOString(),
+              subscription_expires_at: expires.toISOString()
+            };
+          }
+          if (isRejectedOrPending) {
+            return {
+              ...u,
+              plan_tier: 'free',
+              max_pages: 1
+            };
+          }
+          return u;
+        })
+      );
+    }
+
+    /* 4. Sync all 3 tables (payment_transactions, orders, user_profiles) in Supabase */
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase
+          .from('payment_transactions')
+          .update({ status: nextStatus, updated_at: new Date().toISOString() })
+          .eq('id', txn.id);
+
+        if (txn.order_id) {
+          await supabase
+            .from('orders')
+            .update({ order_status: statusOpt.orderLabel })
+            .eq('order_id', txn.order_id);
+        }
+
+        if (txn.user_id) {
+          const now = new Date();
+          const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+          if (isApproved) {
+            await supabase
+              .from('user_profiles')
+              .update({
+                plan_tier: planMeta.planId,
+                max_pages: planMeta.maxPages,
+                status: 'active',
+                subscription_started_at: now.toISOString(),
+                subscription_expires_at: expires.toISOString(),
+                notes: `Verified ${planMeta.planName} | TrxID: ${txn.transaction_id}`,
+                updated_at: now.toISOString()
+              })
+              .eq('id', txn.user_id);
+          } else if (isRejectedOrPending) {
+            await supabase
+              .from('user_profiles')
+              .update({
+                plan_tier: 'free',
+                max_pages: 1,
+                notes: `Payment Status: ${statusOpt.label} | TrxID: ${txn.transaction_id}`,
+                updated_at: now.toISOString()
+              })
+              .eq('id', txn.user_id);
+          }
+        }
+
+        showToast(
+          isApproved
+            ? `Payment verified (${statusOpt.orderLabel}) & ${planMeta.planName} activated for user!`
+            : `Transaction & Global Order status updated to "${statusOpt.orderLabel}"`
+        );
+      } catch (err) {
+        console.error('Failed to sync transaction verification:', err);
+        showToast('Updated locally', 'info');
+      }
+    } else {
+      showToast(`Status updated to ${statusOpt.orderLabel}`);
+    }
+  };
+
+  /* Action: Add Manual Payment Transaction */
+  const handleAddManualTransaction = async (newTxn) => {
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('payment_transactions')
+          .insert({ ...newTxn, created_at: new Date().toISOString() })
+          .select();
+
+        if (!error && data && data.length > 0) {
+          setTransactions(prev => [data[0], ...prev]);
+        } else {
+          setTransactions(prev => [{ id: String(Date.now()), ...newTxn, created_at: new Date().toISOString() }, ...prev]);
+        }
+        showToast('Manual payment record added to verification ledger');
+      } catch {
+        setTransactions(prev => [{ id: String(Date.now()), ...newTxn, created_at: new Date().toISOString() }, ...prev]);
+      }
+    } else {
+      setTransactions(prev => [{ id: String(Date.now()), ...newTxn, created_at: new Date().toISOString() }, ...prev]);
+      showToast('Manual payment record added');
+    }
+  };
+
+  /* Action: Delete Payment Transaction */
+  const handleDeleteTransaction = async (txnId) => {
+    setTransactions(prev => prev.filter(t => t.id !== txnId));
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('payment_transactions').delete().eq('id', txnId);
+        showToast('Transaction deleted from ledger');
+      } catch {
+        showToast('Transaction removed locally', 'info');
+      }
+    }
+  };
+
+  /* Action: Sync AI System Prompt & Knowledge Base across connected business_pages */
+  const handleSyncPagesPrompt = async (targetPageId, systemPrompt, knowledgeBase) => {
+    const nowIso = new Date().toISOString();
+    setPages(prev =>
+      prev.map(p =>
+        targetPageId === 'ALL' || p.page_id === targetPageId
+          ? { ...p, system_prompt: systemPrompt, knowledge_base: knowledgeBase, updated_at: nowIso }
+          : p
+      )
+    );
+
+    if (isSupabaseConfigured()) {
+      try {
+        if (targetPageId === 'ALL') {
+          const pageIds = pages.map(p => p.page_id).filter(Boolean);
+          if (pageIds.length > 0) {
+            const { error } = await supabase
+              .from('business_pages')
+              .update({
+                system_prompt: systemPrompt,
+                knowledge_base: knowledgeBase,
+                updated_at: nowIso
+              })
+              .in('page_id', pageIds);
+            if (error) throw error;
+          }
+        } else {
+          const { error } = await supabase
+            .from('business_pages')
+            .update({
+              system_prompt: systemPrompt,
+              knowledge_base: knowledgeBase,
+              updated_at: nowIso
+            })
+            .eq('page_id', targetPageId);
+          if (error) throw error;
+        }
+        showToast(
+          targetPageId === 'ALL'
+            ? 'Master AI Prompt & Knowledge synced across all connected pages!'
+            : 'Selected business page AI Prompt & Knowledge updated!'
+        );
+      } catch (err) {
+        console.error('Failed to sync AI prompts to business_pages:', err);
+        showToast('Saved locally; verify Supabase permissions if pages did not sync', 'info');
+      }
+    }
+  };
+
   /* Action: Save Platform Master Settings (APIs and SMTP) */
   const handleSaveSettings = async (newSettings) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
@@ -503,6 +763,7 @@ export default function App() {
       {/* Master Top Header */}
       <AdminHeader
         adminUser={adminUser}
+        settings={settings}
         onLogout={() => setIsAuthModalOpen(true)}
       />
 
@@ -512,6 +773,11 @@ export default function App() {
           activeTab={activeTab}
           onSelectTab={handleSelectTab}
           unreadTabs={unreadTabs}
+          pendingPaymentsCount={
+            ledgerVisited
+              ? 0
+              : transactions.filter(t => String(t.status || 'PENDING').toUpperCase() === 'PENDING').length
+          }
         />
 
         <main className="flex-1 h-full overflow-y-auto p-6 md:p-8 bg-gradient-to-b from-slate-950 via-slate-900/60 to-slate-950">
@@ -521,7 +787,13 @@ export default function App() {
               <div className="flex items-center space-x-2 text-xs text-slate-400">
                 <span className="text-purple-400 font-semibold uppercase tracking-wider">Console</span>
                 <span>/</span>
-                <span className="text-slate-200 capitalize font-medium">{activeTab.replace('_', ' ')}</span>
+                <span className="text-slate-200 capitalize font-medium">
+                  {activeTab === 'pages'
+                    ? 'Connected Apps'
+                    : activeTab === 'payment_ledger'
+                      ? 'Payment Verification & Ledger'
+                      : activeTab.replace('_', ' ')}
+                </span>
               </div>
               <button
                 onClick={fetchData}
@@ -540,13 +812,16 @@ export default function App() {
                 users={users}
                 pages={pages}
                 orders={orders}
-                onNavigateTab={setActiveTab}
+                transactions={transactions}
+                onNavigateTab={handleSelectTab}
               />
             )}
 
             {activeTab === 'users' && (
               <UsersManager
                 users={users}
+                settings={settings}
+                onSaveSettings={handleSaveSettings}
                 onUpdateUserPlan={handleUpdateUserPlan}
                 onUpdateUserStatus={handleUpdateUserStatus}
                 onResetUserPassword={handleResetUserPassword}
@@ -559,6 +834,16 @@ export default function App() {
                 packages={packages}
                 users={users}
                 onUpdatePackage={handleUpdatePackage}
+              />
+            )}
+
+            {activeTab === 'payment_ledger' && (
+              <PaymentLedgerView
+                transactions={transactions}
+                users={users}
+                onUpdateTransactionStatus={handleUpdateTransactionStatus}
+                onAddManualTransaction={handleAddManualTransaction}
+                onDeleteTransaction={handleDeleteTransaction}
               />
             )}
 
@@ -576,9 +861,20 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'ai_agents' && (
+              <AdminAIAgentsManager
+                pages={pages}
+                users={users}
+                settings={settings}
+                onSaveSettings={handleSaveSettings}
+                onSyncPagesPrompt={handleSyncPagesPrompt}
+              />
+            )}
+
             {activeTab === 'orders' && (
               <GlobalOrdersView
                 orders={orders}
+                users={users}
                 pages={pages}
                 onDeleteOrder={handleDeleteOrder}
               />
@@ -592,7 +888,12 @@ export default function App() {
             )}
 
             {activeTab === 'staff' && (
-              <StaffAccessManager />
+              <StaffAccessManager
+                users={users}
+                settings={settings}
+                onSaveSettings={handleSaveSettings}
+                onRefreshUsers={fetchData}
+              />
             )}
 
             {activeTab === 'smtp' && (
@@ -609,6 +910,7 @@ export default function App() {
       {/* Admin Authentication Modal */}
       <AdminAuthModal
         isOpen={isAuthModalOpen}
+        settings={settings}
         onAuthSuccess={(profile) => {
           setAdminUser(profile);
           setIsAuthModalOpen(false);
