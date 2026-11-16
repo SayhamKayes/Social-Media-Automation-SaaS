@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   Mail, 
@@ -21,6 +21,11 @@ import {
   Zap
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient';
+import { 
+  getLocalQuotaUsage, 
+  fetchSupabaseQuotaUsage, 
+  getEffectiveUserQuota 
+} from '../../lib/knowledgeLibrary';
 
 export default function UserProfile({ 
   user, 
@@ -46,6 +51,26 @@ export default function UserProfile({
 
   const tenantId = user?.id || userProfile?.id || 'ten_usr_demo_7739';
   const maskedId = tenantId.slice(0, 8) + '••••••••••••••••••••' + tenantId.slice(-4);
+
+  const [usageState, setUsageState] = useState(() => getLocalQuotaUsage(tenantId));
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchSupabaseQuotaUsage(tenantId).then((fresh) => {
+      if (isMounted && fresh) setUsageState(fresh);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantId]);
+
+  const effectiveQuota = getEffectiveUserQuota(userProfile, usageState);
+  const tokenPercent = Math.min(100, Math.round((effectiveQuota.tokensUsed / effectiveQuota.tokenLimit) * 100));
+  const resetDateFormatted = effectiveQuota.nextResetDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
 
   const planTier = (userProfile?.plan_tier || 'free').toLowerCase();
   const maxPages = Number(userProfile?.max_pages) || 1;
@@ -150,6 +175,9 @@ export default function UserProfile({
       priceBDT: '৳0', 
       priceUSD: '$0', 
       period: '1 Month Service',
+      messageCredit: '5K Msg/Mo',
+      aiTokens: '50K AI Tokens',
+      autoPost: '5 Auto-Posts',
       description: 'Introductory 1-month service for small businesses testing AI sales automation.'
     },
     { 
@@ -159,6 +187,9 @@ export default function UserProfile({
       priceBDT: '৳1,499 / mo', 
       priceUSD: '$15', 
       period: '/ mo',
+      messageCredit: '50K Msg/Mo',
+      aiTokens: '500K AI Tokens',
+      autoPost: '20 Auto-Posts',
       description: 'Ideal for independent shops and boutique ecommerce brands.'
     },
     { 
@@ -168,6 +199,9 @@ export default function UserProfile({
       priceBDT: '৳3,999 / mo', 
       priceUSD: '$39', 
       period: '/ mo',
+      messageCredit: '250K Msg/Mo',
+      aiTokens: '2.5M AI Tokens',
+      autoPost: '60 Auto-Posts',
       description: 'High-volume businesses needing multi-channel auto-sales bots.'
     },
     { 
@@ -177,6 +211,9 @@ export default function UserProfile({
       priceBDT: '৳9,999 / mo', 
       priceUSD: '$99', 
       period: '/ mo',
+      messageCredit: '10M Msg/Mo',
+      aiTokens: '10M AI Tokens',
+      autoPost: 'Unlimited Posts',
       description: 'For digital agencies managing unlimited client brand pages.'
     },
   ];
@@ -241,9 +278,9 @@ export default function UserProfile({
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">
-                  Tenant Secret UUID
+                  UID
                 </span>
-                <span className="text-[11px] text-slate-500">Database Identifier</span>
+                <span className="text-[11px] text-slate-500">Account Identifier</span>
               </div>
 
               <div className="flex items-center justify-between gap-3">
@@ -256,7 +293,7 @@ export default function UserProfile({
                     type="button"
                     onClick={() => setShowTenantId(!showTenantId)}
                     className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition"
-                    title={showTenantId ? 'Mask Tenant ID' : 'Reveal Tenant ID'}
+                    title={showTenantId ? 'Mask UID' : 'Reveal UID'}
                   >
                     {showTenantId ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -264,7 +301,7 @@ export default function UserProfile({
                     type="button"
                     onClick={handleCopyTenantId}
                     className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition"
-                    title="Copy to Clipboard"
+                    title="Copy UID to Clipboard"
                   >
                     {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                   </button>
@@ -286,17 +323,70 @@ export default function UserProfile({
             </div>
 
             {/* Price & Quota Metrics */}
-            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-800">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800">
               <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
                 <span className="text-[11px] text-slate-400 block">Plan Billing Rate</span>
-                <span className="text-base font-black text-white mt-1 block">{currentPlanInfo.price}</span>
+                <span className="text-sm font-black text-white mt-1 block">{currentPlanInfo.price}</span>
               </div>
               <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
                 <span className="text-[11px] text-slate-400 block">Connected Pages Limit</span>
-                <span className="text-base font-black text-indigo-400 mt-1 block">
+                <span className="text-sm font-black text-indigo-400 mt-1 block">
                   {isUnlimited ? 'Unlimited' : `${maxPages} Page${maxPages > 1 ? 's' : ''}`}
                 </span>
               </div>
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">Remaining AI Tokens</span>
+                <span className={`text-sm font-black font-mono mt-1 block ${
+                  effectiveQuota.isTokenExhausted ? 'text-rose-400' : 'text-purple-300'
+                }`}>
+                  {effectiveQuota.tokensRemaining.toLocaleString()} / {effectiveQuota.tokenLimit.toLocaleString()}
+                </span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">Next Token Reset</span>
+                <span className="text-sm font-black font-mono text-emerald-400 mt-1 block">
+                  {resetDateFormatted}
+                </span>
+              </div>
+            </div>
+
+            {/* AI Token Quota Progress Bar & Exhausted Notification */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="text-slate-300 font-semibold flex items-center space-x-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Bot AI Token Usage</span>
+                </span>
+                <span className="font-mono text-slate-300">
+                  Used: <strong className="text-white">{effectiveQuota.tokensUsed.toLocaleString()}</strong> • Remaining: <strong className={effectiveQuota.isTokenExhausted ? 'text-rose-400' : 'text-purple-300'}>{effectiveQuota.tokensRemaining.toLocaleString()}</strong> (Resets on {resetDateFormatted})
+                </span>
+              </div>
+              <div className="w-full h-2.5 rounded-full bg-slate-900 overflow-hidden border border-slate-800">
+                <div
+                  className={`h-full transition-all duration-500 rounded-full ${
+                    effectiveQuota.isTokenExhausted ? 'bg-rose-500' : 'bg-purple-500'
+                  }`}
+                  style={{ width: `${Math.max(4, tokenPercent)}%` }}
+                />
+              </div>
+
+              {effectiveQuota.isTokenExhausted && (
+                <div className="p-3 rounded-lg bg-rose-500/15 border border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-rose-200 mt-2">
+                  <div className="flex items-start sm:items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
+                    <span>
+                      <strong>Token Limit Exhausted:</strong> Your monthly AI token limit has ended and will automatically reset on <strong>{resetDateFormatted}</strong>. Add a payment or upgrade your plan to increase your token limit immediately.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowUpgradeModal(true)}
+                    className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold shrink-0 transition"
+                  >
+                    Add Payment / Top-Up
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Visual Quota Progress Bar */}
@@ -555,9 +645,14 @@ export default function UserProfile({
                         )}
                       </div>
                       <p className="text-xs text-indigo-400 font-semibold mt-0.5">
-                        {opt.pages >= 999 ? 'Unlimited Connected Pages' : `Up to ${opt.pages} Connected Business Pages`}
+                        {opt.pages >= 999 ? 'Unlimited Connected Accounts' : `Up to ${opt.pages} Connected Social Accounts`}
                       </p>
-                      <span className="text-[11px] text-slate-400">{opt.priceBDT}</span>
+                      <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px]">
+                        <span className="text-white font-bold">{opt.priceBDT}</span>
+                        <span className="text-emerald-400">• {opt.messageCredit}</span>
+                        <span className="text-purple-300">• {opt.aiTokens}</span>
+                        <span className="text-amber-300">• {opt.autoPost}</span>
+                      </div>
                     </div>
 
                     {!isCurrent && (
