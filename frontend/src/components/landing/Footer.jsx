@@ -1,7 +1,31 @@
-import React from 'react';
-import { Bot } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bot, ExternalLink, ShieldCheck } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient';
 
 export default function Footer() {
+  const isLocalHost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'));
+
+  const [adminPortalUrl, setAdminPortalUrl] = useState(
+    import.meta.env.VITE_ADMIN_PORTAL_URL ||
+      (isLocalHost ? 'http://localhost:3001' : 'https://social-media-automation-admin.vercel.app')
+  );
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    supabase
+      .from('platform_settings')
+      .select('setting_value')
+      .eq('setting_key', 'live_admin_host_url')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.setting_value && data.setting_value.trim()) {
+          setAdminPortalUrl(data.setting_value.trim().replace(/\/+$/, ''));
+        }
+      });
+  }, []);
+
   return (
     <footer className="py-12 bg-slate-900/40 border-t border-slate-900 text-slate-500 text-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
@@ -18,13 +42,23 @@ export default function Footer() {
           &copy; {new Date().getFullYear()} AutoReply AI. Built for scalable social commerce automation.
         </p>
 
-        <div className="flex space-x-6 text-xs sm:text-sm">
+        <div className="flex flex-wrap items-center justify-center gap-5 text-xs sm:text-sm">
           <a href="#features" className="hover:text-slate-300 transition">Features</a>
           <a href="#how-it-works" className="hover:text-slate-300 transition">How it Works</a>
           <a href="#pricing" className="hover:text-slate-300 transition">Pricing</a>
+          <a
+            href={adminPortalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-purple-300 hover:text-purple-200 text-xs font-semibold transition"
+            title={`Open Admin Portal (${adminPortalUrl})`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+            <span>Admin Portal</span>
+            <ExternalLink className="w-3 h-3 text-slate-500" />
+          </a>
         </div>
       </div>
     </footer>
   );
 }
-
