@@ -147,38 +147,72 @@ export default function SubscriptionCheckoutModal({
 
       const numericAmount = Number(String(plan.price_bdt || plan.priceBDT || '0').replace(/[^0-9]/g, '')) || 0;
 
-      /* 1. Record payment transaction in Supabase */
+      const isInstantGateway = selectedMethod === 'sslcommerz';
+      const initialTxnStatus = isInstantGateway ? 'CONFIRMED' : 'PENDING';
+      const initialOrderStatus = isInstantGateway ? 'Confirmed' : 'Pending';
+
+      /* 1. Record payment transaction and global order in Supabase */
       if (isSupabaseConfigured() && user) {
+        const subOrderId = `SUB-${plan.id.toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
         await supabase
           .from('payment_transactions')
           .insert({
             user_id: user.id,
-            order_id: `SUB-${plan.id.toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
+            order_id: subOrderId,
             customer_name: fullName.trim() || user.email || 'Subscriber',
             customer_phone: phone.trim() || 'N/A',
             payment_method: selectedMethod.toUpperCase(),
             transaction_id: generatedTrxId,
             amount: numericAmount,
             currency: 'BDT',
-            status: 'PAID',
-            notes: `Purchased ${plan.name} (${targetMaxPages >= 999 ? 'Unlimited' : targetMaxPages} Pages)`
+            status: initialTxnStatus,
+            notes: `Plan: ${plan.id} | ${plan.name} (${targetMaxPages >= 999 ? 'Unlimited' : targetMaxPages} Pages)`
           });
 
-        /* 2. Upgrade user profile in Supabase with active status and 30-day lifecycle */
+        try {
+          await supabase
+            .from('orders')
+            .insert({
+              user_id: user.id,
+              order_id: subOrderId,
+              customer_name: fullName.trim() || user.email || 'Subscriber',
+              phone_number: phone.trim() || user.email || 'N/A',
+              email: email.trim() || user.email || null,
+              selected_package: `${plan.name} (${selectedMethod.toUpperCase()} Trx: ${generatedTrxId})`,
+              total_amount_bdt: numericAmount,
+              order_status: initialOrderStatus,
+              customer_requirements: `PlanId:${plan.id} | SaaS Package Purchase via ${selectedMethod.toUpperCase()}`
+            });
+        } catch (ordErr) {
+          console.warn('Subscription order log notice:', ordErr);
+        }
+
+        /* 2. Only auto-upgrade user profile if using instant SSLCommerz; MFS awaits manual Admin verification */
         const now = new Date();
         const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-        await supabase
-          .from('user_profiles')
-          .update({
-            plan_tier: plan.id,
-            max_pages: targetMaxPages,
-            status: 'active',
-            subscription_started_at: now.toISOString(),
-            subscription_expires_at: expires.toISOString(),
-            updated_at: now.toISOString()
-          })
-          .eq('id', user.id);
+        if (isInstantGateway) {
+          await supabase
+            .from('user_profiles')
+            .update({
+              plan_tier: plan.id,
+              max_pages: targetMaxPages,
+              status: 'active',
+              subscription_started_at: now.toISOString(),
+              subscription_expires_at: expires.toISOString(),
+              updated_at: now.toISOString()
+            })
+            .eq('id', user.id);
+        } else {
+          await supabase
+            .from('user_profiles')
+            .update({
+              notes: `Pending MFS Verification: ${plan.id} (${plan.name}) | TrxID: ${generatedTrxId}`,
+              updated_at: now.toISOString()
+            })
+            .eq('id', user.id);
+        }
       }
 
       setSuccessReceipt({
@@ -186,13 +220,11 @@ export default function SubscriptionCheckoutModal({
         amount: plan.price_bdt || plan.priceBDT || '৳0',
         method: selectedMethod.toUpperCase(),
         trxId: generatedTrxId,
+        isPending: !isInstantGateway,
         date: new Date().toLocaleString()
       });
 
       setCheckoutStep('success');
-      if (onPaymentSuccess) {
-        onPaymentSuccess(plan.id, targetMaxPages);
-      }
     } catch (err) {
       console.error('Payment processing error:', err);
       setErrorMsg(err.message || 'Payment processing failed. Please try again.');
@@ -478,26 +510,42 @@ export default function SubscriptionCheckoutModal({
             </form>
           </>
         ) : (
-          /* Step 2: Payment Receipt & Success Confirmation */
+          /* Step 2: Payment Receipt & Verification Status */
           <div className="text-center py-6 space-y-5 animate-fade-in">
-            <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-xl shadow-emerald-500/10">
+            <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto shadow-xl ${
+              successReceipt?.isPending
+                ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 shadow-amber-500/10'
+                : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shadow-emerald-500/10'
+            }`}>
               <CheckCircle2 className="w-8 h-8" />
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-xl font-black text-white">Subscription Successfully Activated!</h3>
-              <p className="text-xs text-slate-400">
-                Your account has been upgraded to <strong>{successReceipt?.planName}</strong>
+              <h3 className="text-xl font-black text-white">
+                {successReceipt?.isPending
+                  ? 'Payment Submitted for Verification!'
+                  : 'Subscription Successfully Activated!'}
+              </h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                {successReceipt?.isPending ? (
+                  <>
+                    Your Transaction ID for <strong>{successReceipt?.planName}</strong> has been logged with status <strong>Pending</strong>. Once our Administrator verifies your TrxID, your package will be activated automatically.
+                  </>
+                ) : (
+                  <>
+                    Your account has been upgraded to <strong>{successReceipt?.planName}</strong>
+                  </>
+                )}
               </p>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-left text-xs space-y-2 max-w-sm mx-auto font-mono">
               <div className="flex justify-between py-1 border-b border-slate-900">
-                <span className="text-slate-500">Plan:</span>
+                <span className="text-slate-500">Requested Plan:</span>
                 <span className="text-white font-bold">{successReceipt?.planName}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-900">
-                <span className="text-slate-500">Amount Paid:</span>
+                <span className="text-slate-500">Amount Submitted:</span>
                 <span className="text-emerald-400 font-bold">{successReceipt?.amount}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-900">
@@ -510,7 +558,9 @@ export default function SubscriptionCheckoutModal({
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-slate-500">Status:</span>
-                <span className="text-emerald-400 font-bold">VERIFIED &amp; ACTIVE</span>
+                <span className={`font-bold ${successReceipt?.isPending ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  {successReceipt?.isPending ? 'PENDING ADMIN VERIFICATION' : 'VERIFIED & ACTIVE'}
+                </span>
               </div>
             </div>
 
