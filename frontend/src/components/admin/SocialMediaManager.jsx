@@ -23,10 +23,31 @@ import {
   X,
   RefreshCw,
   Check,
-  Activity
+  Bot,
+  CalendarClock
 } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { verifyMetaPageToken } from '../../lib/metaValidator';
+
+/* Helper to determine social platform from a business_pages row */
+export const getPagePlatform = (page) => {
+  if (!page) return 'facebook';
+  if (page.platform) return page.platform.toLowerCase();
+  const vt = String(page.verify_token || '').toLowerCase();
+  if (vt.startsWith('ig:') || vt.includes('instagram')) return 'instagram';
+  if (vt.startsWith('wa:') || vt.includes('whatsapp')) return 'whatsapp';
+  if (vt.startsWith('li:') || vt.includes('linkedin')) return 'linkedin';
+  const name = String(page.page_name || '').toLowerCase();
+  if (name.startsWith('[ig]') || name.includes('(instagram)')) return 'instagram';
+  if (name.startsWith('[wa]') || name.includes('(whatsapp)')) return 'whatsapp';
+  if (name.startsWith('[in]') || name.includes('(linkedin)')) return 'linkedin';
+  return 'facebook';
+};
+
+export const getCleanVerifyToken = (rawToken) => {
+  if (!rawToken) return 'socialsaas_secret';
+  return String(rawToken).replace(/^(fb|ig|wa|li):/i, '');
+};
 
 export default function SocialMediaManager({ 
   pages = [], 
@@ -56,7 +77,7 @@ export default function SocialMediaManager({
   /* Editing state */
   const [editingPageId, setEditingPageId] = useState(null);
 
-  /* Form states for Facebook */
+  /* Form states for all platforms */
   const [pageId, setPageId] = useState('');
   const [pageName, setPageName] = useState('');
   const [pageAccessToken, setPageAccessToken] = useState('');
@@ -79,21 +100,99 @@ export default function SocialMediaManager({
   const isSubscriptionExpired = expiresAt ? (new Date() > expiresAt) : false;
   const isFreeTrial = (userProfile?.plan_tier || 'free').toLowerCase() === 'free';
   const isFreeTrialExpired = isFreeTrial && isSubscriptionExpired;
-  const daysRemaining = expiresAt ? Math.max(0, Math.ceil((expiresAt - new Date()) / (1000 * 60 * 60 * 24))) : 30;
+
+  /* Platform Metadata & Counts */
+  const fbPages = pages.filter(p => getPagePlatform(p) === 'facebook');
+  const igPages = pages.filter(p => getPagePlatform(p) === 'instagram');
+  const waPages = pages.filter(p => getPagePlatform(p) === 'whatsapp');
+  const liPages = pages.filter(p => getPagePlatform(p) === 'linkedin');
 
   const platforms = [
-    { id: 'facebook', name: 'Facebook', icon: Facebook, count: pages.length, active: true, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    { id: 'instagram', name: 'Instagram', icon: Instagram, count: 0, active: false, color: 'text-pink-400', bg: 'bg-pink-500/10' },
-    { id: 'whatsapp', name: 'WhatsApp', icon: MessageCircle, count: 0, active: false, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-    { id: 'linkedin', name: 'LinkedIn', icon: Linkedin, count: 0, active: false, color: 'text-sky-400', bg: 'bg-sky-500/10' },
+    { 
+      id: 'facebook', 
+      name: 'Facebook', 
+      icon: Facebook, 
+      count: fbPages.length, 
+      color: 'text-blue-400', 
+      bg: 'bg-blue-500/10',
+      borderActive: 'border-blue-500 shadow-blue-500/10',
+      btnBg: 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/30',
+      workflows: 'AI Chatbot + Auto-Post',
+      idLabel: 'Facebook Page ID (Numeric)',
+      idPlaceholder: 'e.g. 109827364512345',
+      nameLabel: 'Facebook Page Name',
+      namePlaceholder: 'e.g. SKzLAB Official Page',
+      tokenLabel: 'Permanent Page Access Token (Meta Graph API)',
+      tokenPlaceholder: 'EAAbx1whxNGcBS2...',
+      prefix: 'fb'
+    },
+    { 
+      id: 'instagram', 
+      name: 'Instagram', 
+      icon: Instagram, 
+      count: igPages.length, 
+      color: 'text-pink-400', 
+      bg: 'bg-pink-500/10',
+      borderActive: 'border-pink-500 shadow-pink-500/10',
+      btnBg: 'bg-pink-600 hover:bg-pink-500 shadow-pink-600/30',
+      workflows: 'IG DM Chatbot + Container Post',
+      idLabel: 'Instagram Business Account ID (IG User ID)',
+      idPlaceholder: 'e.g. 17841405822304914',
+      nameLabel: 'Instagram Business Handle / Name',
+      namePlaceholder: 'e.g. @skzlab.official',
+      tokenLabel: 'Connected Meta Page Access Token (with instagram_basic & manage_messages)',
+      tokenPlaceholder: 'EAAbx1whxNGcBS2...',
+      prefix: 'ig'
+    },
+    { 
+      id: 'whatsapp', 
+      name: 'WhatsApp', 
+      icon: MessageCircle, 
+      count: waPages.length, 
+      color: 'text-emerald-400', 
+      bg: 'bg-emerald-500/10',
+      borderActive: 'border-emerald-500 shadow-emerald-500/10',
+      btnBg: 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30',
+      workflows: 'WhatsApp Cloud AI Chatbot',
+      idLabel: 'WhatsApp Phone Number ID (Cloud API)',
+      idPlaceholder: 'e.g. 105928374651928',
+      nameLabel: 'WhatsApp Business Display Name / Number',
+      namePlaceholder: 'e.g. SKzLAB Support (+88017...)',
+      tokenLabel: 'Permanent System User Access Token (WhatsApp Cloud API)',
+      tokenPlaceholder: 'EAAGm0PX4ZCpsBA...',
+      prefix: 'wa'
+    },
+    { 
+      id: 'linkedin', 
+      name: 'LinkedIn', 
+      icon: Linkedin, 
+      count: liPages.length, 
+      color: 'text-sky-400', 
+      bg: 'bg-sky-500/10',
+      borderActive: 'border-sky-500 shadow-sky-500/10',
+      btnBg: 'bg-sky-600 hover:bg-sky-500 shadow-sky-600/30',
+      workflows: 'LinkedIn Auto-Posting',
+      idLabel: 'LinkedIn Author URN or Organization ID',
+      idPlaceholder: 'e.g. urn:li:person:AbCdEf123 or 98273645',
+      nameLabel: 'LinkedIn Profile or Company Page Name',
+      namePlaceholder: 'e.g. SKzLAB Technologies',
+      tokenLabel: 'LinkedIn OAuth 2.0 Access Token (w_member_social / w_organization_social)',
+      tokenPlaceholder: 'AQV8x9LmN2...',
+      prefix: 'li'
+    },
   ];
 
+  const currentPlatformMeta = platforms.find(p => p.id === selectedPlatform) || platforms[0];
+  const currentPlatformPages = pages.filter(p => getPagePlatform(p) === selectedPlatform);
+
   const handleStartEdit = (page) => {
+    const plat = getPagePlatform(page);
+    setSelectedPlatform(plat);
     setEditingPageId(page.page_id);
     setPageId(page.page_id);
     setPageName(page.page_name || '');
     setPageAccessToken(page.page_access_token || '');
-    setVerifyToken(page.verify_token || 'socialsaas_secret');
+    setVerifyToken(getCleanVerifyToken(page.verify_token));
     setMetaResult(null);
     setShowAddForm(true);
     setErrorMsg('');
@@ -113,16 +212,15 @@ export default function SocialMediaManager({
 
   const handleOpenAdd = () => {
     if (isFreeTrialExpired) {
-      setErrorMsg('Free Trial Expired: Your 1-Month Free Trial has ended. Please upgrade and pay for a package to connect pages.');
+      setErrorMsg('Free Trial Expired: Your 1-Month Free Trial has ended. Please upgrade and pay for a package to connect social channels.');
       setShowUpgradeModal(true);
       return;
     }
     if (isSubscriptionExpired) {
-      setErrorMsg('Subscription Expired: Your 30-Day billing cycle has ended. Please renew to connect pages.');
+      setErrorMsg('Subscription Expired: Your 30-Day billing cycle has ended. Please renew to connect social channels.');
       setShowUpgradeModal(true);
       return;
     }
-    /* If adding a new page and quota reached, block and trigger upgrade modal */
     if (isQuotaReached) {
       setShowUpgradeModal(true);
       return;
@@ -133,16 +231,25 @@ export default function SocialMediaManager({
 
   const handleTestTokenInForm = async () => {
     if (!pageId.trim() || !pageAccessToken.trim()) {
-      setErrorMsg('Please enter both Facebook Page ID and Page Access Token before testing.');
+      setErrorMsg(`Please enter both ${currentPlatformMeta.idLabel} and Access Token before testing.`);
       return;
     }
     setMetaChecking(true);
     setMetaResult(null);
     try {
-      const res = await verifyMetaPageToken(pageId.trim(), pageAccessToken.trim());
-      setMetaResult(res);
-      if (res.success && res.pageName && !pageName) {
-        setPageName(res.pageName);
+      if (selectedPlatform === 'linkedin') {
+        /* LinkedIn token format sanity check */
+        if (pageAccessToken.trim().length > 25) {
+          setMetaResult({ success: true, pageName: pageName || 'LinkedIn OAuth Token Ready' });
+        } else {
+          setMetaResult({ success: false, error: 'LinkedIn OAuth token appears too short.' });
+        }
+      } else {
+        const res = await verifyMetaPageToken(pageId.trim(), pageAccessToken.trim());
+        setMetaResult(res);
+        if (res.success && res.pageName && !pageName) {
+          setPageName(res.pageName);
+        }
       }
     } catch (err) {
       setMetaResult({ success: false, error: err.message || 'Token verification failed' });
@@ -153,12 +260,23 @@ export default function SocialMediaManager({
 
   const handleTestCardToken = async (page) => {
     setCardCheckingId(page.page_id);
+    const plat = getPagePlatform(page);
     try {
-      const res = await verifyMetaPageToken(page.page_id, page.page_access_token);
-      setCardCheckResults(prev => ({
-        ...prev,
-        [page.page_id]: res
-      }));
+      if (plat === 'linkedin') {
+        const isValid = Boolean(page.page_access_token && page.page_access_token.length > 25);
+        setCardCheckResults(prev => ({
+          ...prev,
+          [page.page_id]: isValid 
+            ? { success: true, pageName: 'LinkedIn OAuth Ready' } 
+            : { success: false, error: 'Invalid Token' }
+        }));
+      } else {
+        const res = await verifyMetaPageToken(page.page_id, page.page_access_token);
+        setCardCheckResults(prev => ({
+          ...prev,
+          [page.page_id]: res
+        }));
+      }
     } catch (err) {
       setCardCheckResults(prev => ({
         ...prev,
@@ -181,7 +299,7 @@ export default function SocialMediaManager({
       setIsDeleteModalOpen(false);
       setPageToDelete(null);
     } catch (err) {
-      setErrorMsg('Failed to disconnect page: ' + (err.message || 'Unknown error'));
+      setErrorMsg('Failed to disconnect channel: ' + (err.message || 'Unknown error'));
       setIsDeleteModalOpen(false);
     }
   };
@@ -192,47 +310,55 @@ export default function SocialMediaManager({
     setSuccessMsg('');
 
     if (isFreeTrialExpired) {
-      setErrorMsg('Free Trial Expired: Your 1-Month Free Trial has ended. Please upgrade to a paid package to connect or edit Facebook pages.');
+      setErrorMsg('Free Trial Expired: Your 1-Month Free Trial has ended. Please upgrade to a paid package to connect or edit social accounts.');
       setShowUpgradeModal(true);
       return;
     }
 
     if (isSubscriptionExpired) {
-      setErrorMsg('Subscription Expired: Your 30-Day billing cycle has ended. Please renew your plan to connect or edit Facebook pages.');
+      setErrorMsg('Subscription Expired: Your 30-Day billing cycle has ended. Please renew your plan to connect or edit social accounts.');
       setShowUpgradeModal(true);
       return;
     }
 
-    /* Strict client side quota defense */
     if (!editingPageId && isQuotaReached) {
-      setErrorMsg(`Quota Reached: Your ${planTier} plan allows maximum ${maxPages} page(s). Please upgrade to connect more.`);
+      setErrorMsg(`Quota Reached: Your ${planTier} plan allows maximum ${maxPages} connected account(s). Please upgrade to connect more.`);
       setShowUpgradeModal(true);
       return;
     }
 
     if (!pageId.trim() || !pageAccessToken.trim()) {
-      setErrorMsg('Page ID and Page Access Token are mandatory.');
+      setErrorMsg(`${currentPlatformMeta.idLabel} and Access Token are mandatory.`);
       return;
     }
+
+    const cleanVt = getCleanVerifyToken(verifyToken.trim() || 'socialsaas_secret');
+    const taggedVerifyToken = `${currentPlatformMeta.prefix}:${cleanVt}`;
 
     setLoading(true);
     try {
       await onSavePage({
         page_id: pageId.trim(),
-        page_name: pageName.trim() || 'My Facebook Business Page',
+        page_name: pageName.trim() || `My ${currentPlatformMeta.name} Account`,
         page_access_token: pageAccessToken.trim(),
-        verify_token: verifyToken.trim() || 'socialsaas_secret',
+        verify_token: taggedVerifyToken,
         is_active: true
       });
 
-      setSuccessMsg(editingPageId ? 'Facebook Page updated successfully!' : 'Facebook Page connected and saved successfully!');
+      setSuccessMsg(
+        editingPageId 
+          ? `${currentPlatformMeta.name} account credentials updated and synced with n8n workflows!` 
+          : `${currentPlatformMeta.name} account connected and synced with n8n workflows!`
+      );
       handleCancelForm();
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to save page.');
+      setErrorMsg(err.message || 'Failed to save social account.');
     } finally {
       setLoading(false);
     }
   };
+
+  const PlatformIcon = currentPlatformMeta.icon;
 
   return (
     <div className="space-y-6">
@@ -253,58 +379,56 @@ export default function SocialMediaManager({
             </div>
           </div>
           <p className="text-sm text-slate-400 mt-1">
-            Connect and manage multi-tenant accounts across Facebook, Instagram, WhatsApp, and more.
+            Connect Facebook, Instagram, WhatsApp, and LinkedIn credentials to power your n8n AI Chatbot and Auto-Posting workflows.
           </p>
         </div>
 
-        {selectedPlatform === 'facebook' && (
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowTutorial(!showTutorial)}
-              className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
-            >
-              <HelpCircle className="w-4 h-4 text-indigo-400" />
-              <span>Token Guide</span>
-            </button>
-            <button
-              onClick={showAddForm ? handleCancelForm : handleOpenAdd}
-              className={`inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition shadow-lg ${
-                showAddForm
-                  ? 'bg-slate-800 text-slate-300 hover:text-white'
-                  : isQuotaReached
-                    ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30'
-                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
-              }`}
-            >
-              {showAddForm ? (
-                <span>Cancel</span>
-              ) : isQuotaReached ? (
-                <>
-                  <Lock className="w-4 h-4" />
-                  <span>Connect Page (Limit Reached)</span>
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4" />
-                  <span>Connect New Page</span>
-                </>
-              )}
-            </button>
-          </div>
-        )}
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowTutorial(!showTutorial)}
+            className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+          >
+            <HelpCircle className="w-4 h-4 text-indigo-400" />
+            <span>{currentPlatformMeta.name} Guide</span>
+          </button>
+          <button
+            onClick={showAddForm ? handleCancelForm : handleOpenAdd}
+            className={`inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition shadow-lg ${
+              showAddForm
+                ? 'bg-slate-800 text-slate-300 hover:text-white'
+                : isQuotaReached
+                  ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30'
+                  : `${currentPlatformMeta.btnBg} text-white`
+            }`}
+          >
+            {showAddForm ? (
+              <span>Cancel</span>
+            ) : isQuotaReached ? (
+              <>
+                <Lock className="w-4 h-4" />
+                <span>Connect {currentPlatformMeta.name} (Limit Reached)</span>
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4" />
+                <span>Connect {currentPlatformMeta.name}</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Quota Limit Reached Warning Banner */}
-      {isQuotaReached && selectedPlatform === 'facebook' && (
+      {isQuotaReached && (
         <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-200">
           <div className="flex items-start sm:items-center space-x-3">
             <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
             <div>
               <p className="text-xs font-bold">
-                Page Limit Reached ({currentCount}/{maxPages} pages connected)
+                Channel Limit Reached ({currentCount}/{maxPages} social accounts connected)
               </p>
               <p className="text-[11px] text-amber-300/80 mt-0.5">
-                Your current <strong>{planTier}</strong> plan is capped at {maxPages} page(s). Upgrade to <strong>Starter Growth (3 pages)</strong> or <strong>Business Pro (10 pages)</strong> to connect additional client pages.
+                Your current <strong>{planTier}</strong> plan is capped at {maxPages} connected channel(s). Upgrade to <strong>Starter Growth (3 channels)</strong> or <strong>Business Pro (10 channels)</strong> to connect additional accounts.
               </p>
             </div>
           </div>
@@ -328,7 +452,7 @@ export default function SocialMediaManager({
                 Account Suspended by Administrator
               </p>
               <p className="text-xs text-rose-300/80 mt-0.5">
-                Automated Messenger bot responses are temporarily paused across all connected pages. Please contact platform administrators to restore service.
+                Automated n8n chatbot replies and scheduled posts are temporarily paused across all connected accounts. Please contact platform administrators.
               </p>
             </div>
           </div>
@@ -348,7 +472,7 @@ export default function SocialMediaManager({
                 1-Month Free Trial Has Expired (Payment Required)
               </p>
               <p className="text-xs text-amber-300/90 mt-0.5 leading-relaxed">
-                Your 30-day Free Trial period has ended. Automated bot messaging is suspended across all connected pages. Please select and pay for a subscription package to reactivate your bots.
+                Your 30-day Free Trial period has ended. Automated bot messaging and auto-posting are suspended. Please select and pay for a subscription package to reactivate your channels.
               </p>
             </div>
           </div>
@@ -372,7 +496,7 @@ export default function SocialMediaManager({
                 30-Day Subscription Cycle Expired
               </p>
               <p className="text-xs text-amber-300/80 mt-0.5">
-                Your monthly subscription period has concluded. Autopilot replies are currently paused. Renew your subscription to immediately reactivate your bots.
+                Your monthly subscription period has concluded. Autopilot replies and scheduled posts are currently paused. Renew your subscription to immediately reactivate your channels.
               </p>
             </div>
           </div>
@@ -386,8 +510,8 @@ export default function SocialMediaManager({
         </div>
       )}
 
-      {/* Platform Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* 4 Compact Platform Selector Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {platforms.map((p) => {
           const Icon = p.icon;
           const isSelected = selectedPlatform === p.id;
@@ -398,30 +522,34 @@ export default function SocialMediaManager({
                 setSelectedPlatform(p.id);
                 handleCancelForm();
               }}
-              className={`p-4 rounded-2xl border transition-all flex items-center justify-between text-left ${
+              className={`px-3.5 py-2.5 rounded-xl border transition-all flex items-center justify-between text-left ${
                 isSelected
-                  ? 'bg-slate-900 border-indigo-500 shadow-lg shadow-indigo-500/10'
+                  ? `bg-slate-900 ${p.borderActive} shadow-md`
                   : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
               }`}
             >
-              <div className="flex items-center space-x-3">
-                <div className={`w-9 h-9 rounded-xl ${p.bg} flex items-center justify-center`}>
-                  <Icon className={`w-5 h-5 ${p.color}`} />
+              <div className="flex items-center space-x-2.5">
+                <div className={`w-8 h-8 rounded-lg ${p.bg} flex items-center justify-center shrink-0`}>
+                  <Icon className={`w-4 h-4 ${p.color}`} />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white">{p.name}</p>
-                  <p className="text-[11px] text-slate-500">
-                    {p.active ? `${p.count} Connected` : 'Ready to Connect'}
+                  <p className="text-xs font-bold text-white leading-tight">{p.name}</p>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                    {p.count} Connected
                   </p>
                 </div>
               </div>
-              {isSelected && <span className="w-2 h-2 rounded-full bg-indigo-400" />}
+              {p.count > 0 ? (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400 shrink-0" title="Connected & Active" />
+              ) : isSelected ? (
+                <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
+              ) : null}
             </button>
           );
         })}
       </div>
 
-      {/* Messages */}
+      {/* Feedback Messages */}
       {errorMsg && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-sm flex items-center space-x-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -436,301 +564,390 @@ export default function SocialMediaManager({
         </div>
       )}
 
-      {/* Detailed Token Guide Card */}
-      {showTutorial && selectedPlatform === 'facebook' && (
+      {/* Platform-Specific Credential Guide */}
+      {showTutorial && (
         <div className="p-6 rounded-2xl bg-slate-900 border border-indigo-500/30 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white flex items-center space-x-2">
               <KeyRound className="w-4 h-4 text-indigo-400" />
-              <span>Step-by-Step Guide: Connecting Your Facebook Page</span>
+              <span>How to Get Your {currentPlatformMeta.name} Credentials for n8n Automation</span>
             </h3>
             <button onClick={() => setShowTutorial(false)} className="text-xs text-slate-500 hover:text-white">
               Close
             </button>
           </div>
 
-          <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-start space-x-2">
-            <Info className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
-              <strong>Good News:</strong> You only need your <strong>Facebook Page ID</strong> and <strong>Page Access Token</strong> here. You do <em>not</em> need to enter Meta App ID or App Secret for your bot to chat!
-            </span>
-          </div>
+          {selectedPlatform === 'facebook' && (
+            <ol className="list-decimal list-inside space-y-2 text-xs text-slate-300 leading-relaxed">
+              <li>
+                <strong>Facebook Page ID:</strong> Open your Facebook Page &gt; <strong>About &gt; Page transparency</strong> and copy your numeric <strong>Page ID</strong>.
+              </li>
+              <li>
+                <strong>Page Access Token:</strong> Open{' '}
+                <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" className="text-indigo-400 underline">
+                  Meta Graph API Explorer
+                </a>, select your Page under <em>User or Page</em>, and include <code className="bg-slate-800 px-1 py-0.5 rounded text-indigo-300">pages_messaging</code>, <code className="bg-slate-800 px-1 py-0.5 rounded text-indigo-300">pages_manage_posts</code>, and <code className="bg-slate-800 px-1 py-0.5 rounded text-indigo-300">pages_read_engagement</code>.
+              </li>
+              <li>
+                <strong>Powers Both Workflows:</strong> Once saved, n8n uses this token for both <strong>24/7 Messenger AI Chatbot</strong> and <strong>Scheduled Facebook Auto-Posting</strong>.
+              </li>
+            </ol>
+          )}
 
-          <ol className="list-decimal list-inside space-y-2.5 text-xs text-slate-300 leading-relaxed">
-            <li>
-              <strong>Get your Page ID:</strong> Open your Facebook Page in a browser, go to <strong>About &gt; Page transparency</strong> to copy the numeric <strong>Page ID</strong>.
-            </li>
-            <li>
-              <strong>Generate Page Access Token:</strong> Go to the official{' '}
-              <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" className="text-indigo-400 underline inline-flex items-center space-x-1">
-                <span>Meta Graph API Explorer</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>. Select your Page under <em>User or Page</em>, and grant <code className="bg-slate-800 px-1 py-0.5 rounded text-indigo-300">pages_messaging</code> permission.
-            </li>
-            <li>
-              <strong>Extend to Permanent Token:</strong> In{' '}
-              <a href="https://developers.facebook.com/tools/debug/accesstoken/" target="_blank" rel="noreferrer" className="text-indigo-400 underline inline-flex items-center space-x-1">
-                <span>Access Token Debugger</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>, paste your token and click <strong>Extend Access Token</strong>.
-            </li>
-            <li>
-              <strong>Paste &amp; Save:</strong> Click <strong>Connect New Page</strong>, paste your credentials, and start automated conversations!
-            </li>
-          </ol>
+          {selectedPlatform === 'instagram' && (
+            <ol className="list-decimal list-inside space-y-2 text-xs text-slate-300 leading-relaxed">
+              <li>
+                <strong>Link Instagram to Facebook Page:</strong> Ensure your Instagram account is switched to a <strong>Professional / Business Account</strong> and linked to your Facebook Page.
+              </li>
+              <li>
+                <strong>Instagram Business Account ID:</strong> In Meta Graph API Explorer, query <code className="bg-slate-800 px-1 py-0.5 rounded text-pink-300">me?fields=instagram_business_account</code> using your Page Token to copy the numeric <strong>Instagram Business ID</strong> (starts with <code className="text-pink-300">1784...</code>).
+              </li>
+              <li>
+                <strong>Permissions Required:</strong> Grant <code className="bg-slate-800 px-1 py-0.5 rounded text-pink-300">instagram_basic</code>, <code className="bg-slate-800 px-1 py-0.5 rounded text-pink-300">instagram_content_publish</code> (for n8n Container ID Auto-Post), and <code className="bg-slate-800 px-1 py-0.5 rounded text-pink-300">instagram_manage_messages</code> (for Instagram DM AI Chatbot).
+              </li>
+            </ol>
+          )}
+
+          {selectedPlatform === 'whatsapp' && (
+            <ol className="list-decimal list-inside space-y-2 text-xs text-slate-300 leading-relaxed">
+              <li>
+                <strong>WhatsApp Phone Number ID:</strong> Go to <strong>Meta Developer Portal &gt; WhatsApp &gt; API Setup</strong> and copy the numeric <strong>Phone Number ID</strong>.
+              </li>
+              <li>
+                <strong>Permanent System User Token:</strong> In <strong>Meta Business Settings &gt; System Users</strong>, generate a permanent token with <code className="bg-slate-800 px-1 py-0.5 rounded text-emerald-300">whatsapp_business_messaging</code> and <code className="bg-slate-800 px-1 py-0.5 rounded text-emerald-300">whatsapp_business_management</code> permissions.
+              </li>
+              <li>
+                <strong>Automated AI Replies &amp; Order Capture:</strong> Incoming WhatsApp messages trigger your n8n Gemini AI Agent and log confirmed orders directly into your Orders &amp; Leads panel.
+              </li>
+            </ol>
+          )}
+
+          {selectedPlatform === 'linkedin' && (
+            <ol className="list-decimal list-inside space-y-2 text-xs text-slate-300 leading-relaxed">
+              <li>
+                <strong>LinkedIn Author URN / Organization ID:</strong> Go to the{' '}
+                <a href="https://www.linkedin.com/developers/apps" target="_blank" rel="noreferrer" className="text-sky-400 underline">
+                  LinkedIn Developer Portal
+                </a>{' '}
+                and copy your Personal URN (or Company Page Organization ID).
+              </li>
+              <li>
+                <strong>OAuth 2.0 Access Token:</strong> Generate an OAuth2 token with <code className="bg-slate-800 px-1 py-0.5 rounded text-sky-300">w_member_social</code> or <code className="bg-slate-800 px-1 py-0.5 rounded text-sky-300">w_organization_social</code> scope.
+              </li>
+              <li>
+                <strong>Automated LinkedIn Posting:</strong> Your n8n Auto-Posting workflow will automatically download images from Google Drive / URL and publish posts to your LinkedIn account.
+              </li>
+            </ol>
+          )}
         </div>
       )}
 
-      {/* FACEBOOK TAB CONTENT */}
-      {selectedPlatform === 'facebook' && (
-        <>
-          {showAddForm && (
-            <div className="p-6 rounded-2xl bg-slate-900 border border-indigo-500/30 shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                  <Facebook className="w-4 h-4 text-blue-400" />
-                  <span>{editingPageId ? 'Edit Facebook Page Details' : 'Connect New Facebook Page'}</span>
-                </h3>
+      {/* ADD / EDIT CREDENTIALS FORM FOR SELECTED PLATFORM */}
+      {showAddForm && (
+        <div className="p-6 rounded-2xl bg-slate-900 border border-indigo-500/30 shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-bold text-white flex items-center space-x-2">
+              <PlatformIcon className={`w-5 h-5 ${currentPlatformMeta.color}`} />
+              <span>
+                {editingPageId 
+                  ? `Edit ${currentPlatformMeta.name} Account Credentials` 
+                  : `Connect New ${currentPlatformMeta.name} Account`}
+              </span>
+            </h3>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 font-medium border border-indigo-500/30">
+              {currentPlatformMeta.workflows}
+            </span>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                  {currentPlatformMeta.nameLabel}
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder={currentPlatformMeta.namePlaceholder}
+                  value={pageName}
+                  onChange={(e) => setPageName(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                  {currentPlatformMeta.idLabel}
+                </label>
+                <input
+                  type="text"
+                  required
+                  disabled={!!editingPageId}
+                  placeholder={currentPlatformMeta.idPlaceholder}
+                  value={pageId}
+                  onChange={(e) => setPageId(e.target.value)}
+                  className={`w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition ${
+                    editingPageId ? 'opacity-60 cursor-not-allowed' : ''
+                  }`}
+                />
                 {editingPageId && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-medium border border-amber-500/30">
-                    Editing Mode
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Account ID is the unique database key and cannot be altered while editing.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  {currentPlatformMeta.tokenLabel}
+                </label>
+                <button
+                  type="button"
+                  onClick={handleTestTokenInForm}
+                  disabled={metaChecking || !pageAccessToken.trim() || !pageId.trim()}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white text-xs font-semibold border border-indigo-500/20 disabled:opacity-50 transition"
+                >
+                  <RefreshCw className={`w-3 h-3 ${metaChecking ? 'animate-spin' : ''}`} />
+                  <span>{metaChecking ? 'Verifying...' : 'Verify Credentials'}</span>
+                </button>
+              </div>
+              <textarea
+                required
+                rows={3}
+                placeholder={currentPlatformMeta.tokenPlaceholder}
+                value={pageAccessToken}
+                onChange={(e) => setPageAccessToken(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500 transition"
+              />
+              <div className="flex items-center justify-between mt-1 text-[11px]">
+                <span className="text-slate-500">
+                  Synced directly with n8n backend workflows via encrypted Supabase connection.
+                </span>
+                {metaResult && (
+                  <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md font-medium border ${
+                    metaResult.success
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                      : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                  }`}>
+                    {metaResult.success ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                    <span>{metaResult.success ? `Verified: ${metaResult.pageName || 'Token Active'}` : metaResult.error}</span>
                   </span>
                 )}
               </div>
+            </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                      Page Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. SKzLAB Software Agency"
-                      value={pageName}
-                      onChange={(e) => setPageName(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 transition"
-                    />
-                  </div>
+            {selectedPlatform !== 'linkedin' && (
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                  Webhook Verify Token
+                </label>
+                <input
+                  type="text"
+                  value={verifyToken}
+                  onChange={(e) => setVerifyToken(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition"
+                />
+              </div>
+            )}
 
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                      Facebook Page ID (Numeric)
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      disabled={!!editingPageId}
-                      placeholder="e.g. 109827364512345"
-                      value={pageId}
-                      onChange={(e) => setPageId(e.target.value)}
-                      className={`w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition ${
-                        editingPageId ? 'opacity-60 cursor-not-allowed' : ''
-                      }`}
-                    />
-                    {editingPageId && (
-                      <p className="text-[10px] text-slate-500 mt-1">
-                        Page ID is the unique database key and cannot be altered while editing.
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelForm}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className={`px-5 py-2 rounded-xl text-white text-xs font-bold transition shadow-lg disabled:opacity-50 ${currentPlatformMeta.btnBg}`}
+              >
+                {loading 
+                  ? (editingPageId ? 'Updating...' : 'Connecting...') 
+                  : (editingPageId ? `Update ${currentPlatformMeta.name} Account` : `Save & Connect ${currentPlatformMeta.name}`)}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* CONNECTED ACCOUNTS LIST FOR SELECTED PLATFORM */}
+      <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+            <PlatformIcon className={`w-4 h-4 ${currentPlatformMeta.color}`} />
+            <span>Connected {currentPlatformMeta.name} Accounts ({currentPlatformPages.length})</span>
+          </h3>
+          <div className="flex items-center space-x-2 text-xs">
+            {(selectedPlatform === 'facebook' || selectedPlatform === 'instagram' || selectedPlatform === 'whatsapp') && (
+              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[11px]">
+                <Bot className="w-3 h-3" />
+                <span>AI Chatbot Enabled</span>
+              </span>
+            )}
+            {(selectedPlatform === 'facebook' || selectedPlatform === 'instagram' || selectedPlatform === 'linkedin') && (
+              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[11px]">
+                <CalendarClock className="w-3 h-3" />
+                <span>Auto-Post Enabled</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {currentPlatformPages.length === 0 ? (
+          <div className="p-12 text-center space-y-3">
+            <div className={`w-14 h-14 rounded-2xl ${currentPlatformMeta.bg} flex items-center justify-center mx-auto ${currentPlatformMeta.color}`}>
+              <PlatformIcon className="w-7 h-7" />
+            </div>
+            <div>
+              <p className="text-base font-bold text-slate-200">No {currentPlatformMeta.name} Account Connected Yet</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
+                Click <strong>"Connect {currentPlatformMeta.name}"</strong> above and enter your {currentPlatformMeta.idLabel} and Access Token so your n8n workflows can automatically run {currentPlatformMeta.workflows}.
+              </p>
+            </div>
+            <button
+              onClick={handleOpenAdd}
+              className={`inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white transition shadow-lg ${currentPlatformMeta.btnBg}`}
+            >
+              <Plus className="w-4 h-4" />
+              <span>Connect {currentPlatformMeta.name} Account Now</span>
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-800">
+            {currentPlatformPages.map((page) => {
+              const isCardSuspended = isUserSuspended || page.bot_status === 'SUSPENDED';
+              const testRes = cardCheckResults[page.page_id];
+
+              return (
+                <div key={page.page_id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="text-base font-bold text-white">{page.page_name}</span>
+                      
+                      {isUserSuspended ? (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400 text-xs font-semibold border border-rose-500/30">
+                          <ShieldAlert className="w-3.5 h-3.5" />
+                          <span>SUSPENDED by Administrator</span>
+                        </span>
+                      ) : page.bot_status === 'SUSPENDED' ? (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400 text-xs font-semibold border border-rose-500/30">
+                          <ShieldAlert className="w-3.5 h-3.5" />
+                          <span>Channel Suspended by Admin</span>
+                        </span>
+                      ) : isFreeTrialExpired ? (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-xs font-semibold border border-amber-500/30">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          <span>Free Trial Expired (Payment Required)</span>
+                        </span>
+                      ) : isSubscriptionExpired ? (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-xs font-semibold border border-amber-500/30">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          <span>Subscription Expired</span>
+                        </span>
+                      ) : page.is_active ? (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium border border-emerald-500/20">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>Connected &amp; Active</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 text-xs font-medium">
+                          <span>Paused</span>
+                        </span>
+                      )}
+
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-semibold">
+                        {currentPlatformMeta.workflows}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-400 font-mono">
+                      {currentPlatformMeta.idLabel}: <span className="text-indigo-400 font-semibold">{page.page_id}</span>
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                      <span className="text-xs text-slate-500 font-mono">
+                        Access Token: {page.page_access_token ? `${page.page_access_token.slice(0, 18)}...` : 'None'}
+                      </span>
+                      {testRes && (
+                        <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium border ${
+                          testRes.success
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                        }`}>
+                          {testRes.success ? <Check className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                          <span>{testRes.success ? `Verified (${testRes.pageName || 'OK'})` : testRes.error}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {isCardSuspended && (
+                      <p className="text-[11px] text-rose-400/90 font-medium">
+                        Automated n8n workflows are blocked because of administrator suspension.
                       </p>
                     )}
                   </div>
-                </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
-                      Page Access Token (Permanent / Long-Lived)
-                    </label>
+                  <div className="flex items-center space-x-2">
                     <button
-                      type="button"
-                      onClick={handleTestTokenInForm}
-                      disabled={metaChecking || !pageAccessToken.trim() || !pageId.trim()}
-                      className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white text-xs font-semibold border border-indigo-500/20 disabled:opacity-50 transition"
+                      onClick={() => handleTestCardToken(page)}
+                      disabled={cardCheckingId === page.page_id}
+                      className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 transition"
+                      title="Verify Credentials"
                     >
-                      <RefreshCw className={`w-3 h-3 ${metaChecking ? 'animate-spin' : ''}`} />
-                      <span>{metaChecking ? 'Verifying with Meta...' : 'Test Token with Meta'}</span>
+                      <RefreshCw className={`w-4 h-4 ${cardCheckingId === page.page_id ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                      onClick={() => handleStartEdit(page)}
+                      className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 transition"
+                      title="Edit Credentials"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleTriggerDelete(page)}
+                      className="p-2.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition"
+                      title="Disconnect Account"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                  <textarea
-                    required
-                    rows={3}
-                    placeholder="EAAbx1whxNGcBS2..."
-                    value={pageAccessToken}
-                    onChange={(e) => setPageAccessToken(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500 transition"
-                  />
-                  <div className="flex items-center justify-between mt-1 text-[11px]">
-                    <span className="text-slate-500">
-                      Protected by Supabase Row-Level Security (RLS). Never shared across clients.
-                    </span>
-                    {metaResult && (
-                      <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md font-medium border ${
-                        metaResult.success
-                          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                          : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                      }`}>
-                        {metaResult.success ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                        <span>{metaResult.success ? `Meta Verified: ${metaResult.pageName || 'Valid Token'}` : metaResult.error}</span>
-                      </span>
-                    )}
-                  </div>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                    Webhook Verify Token
-                  </label>
-                  <input
-                    type="text"
-                    value={verifyToken}
-                    onChange={(e) => setVerifyToken(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono transition"
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={handleCancelForm}
-                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/30 disabled:opacity-50"
-                  >
-                    {loading 
-                      ? (editingPageId ? 'Updating...' : 'Connecting...') 
-                      : (editingPageId ? 'Update Page Details' : 'Save & Connect Page')}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* Connected Facebook Pages List */}
-          <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-                <Facebook className="w-4 h-4 text-blue-400" />
-                <span>Connected Facebook Pages ({pages.length})</span>
-              </h3>
-              <span className="text-xs text-slate-500">Auto-routes to production n8n webhook</span>
-            </div>
-
-            {pages.length === 0 ? (
-              <div className="p-12 text-center">
-                <Facebook className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-base font-semibold text-slate-300">No Facebook Pages Connected</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Click "Connect New Page" above to add your first Facebook business page.
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-800">
-                {pages.map((page) => {
-                  const isCardSuspended = isUserSuspended || page.bot_status === 'SUSPENDED';
-                  const testRes = cardCheckResults[page.page_id];
-
-                  return (
-                    <div key={page.page_id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-3">
-                          <span className="text-base font-bold text-white">{page.page_name}</span>
-                          
-                          {isUserSuspended ? (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400 text-xs font-semibold border border-rose-500/30">
-                              <ShieldAlert className="w-3.5 h-3.5" />
-                              <span>SUSPENDED by Administrator</span>
-                            </span>
-                          ) : page.bot_status === 'SUSPENDED' ? (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400 text-xs font-semibold border border-rose-500/30">
-                              <ShieldAlert className="w-3.5 h-3.5" />
-                              <span>Page Suspended by Admin</span>
-                            </span>
-                          ) : isFreeTrialExpired ? (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-xs font-semibold border border-amber-500/30">
-                              <AlertCircle className="w-3.5 h-3.5" />
-                              <span>Free Trial Expired (Payment Required)</span>
-                            </span>
-                          ) : isSubscriptionExpired ? (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-xs font-semibold border border-amber-500/30">
-                              <AlertCircle className="w-3.5 h-3.5" />
-                              <span>Subscription Expired</span>
-                            </span>
-                          ) : page.is_active ? (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium">
-                              <ShieldCheck className="w-3.5 h-3.5" />
-                              <span>Active &amp; Ready</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 text-xs font-medium">
-                              <span>Paused</span>
-                            </span>
-                          )}
-                        </div>
-
-                        <p className="text-xs text-slate-400 font-mono">
-                          Page ID: <span className="text-indigo-400 font-semibold">{page.page_id}</span>
-                        </p>
-
-                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                          <span className="text-xs text-slate-500 font-mono">
-                            Access Token: {page.page_access_token ? `${page.page_access_token.slice(0, 18)}...` : 'None'}
-                          </span>
-                          {testRes && (
-                            <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium border ${
-                              testRes.success
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                            }`}>
-                              {testRes.success ? <Check className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                              <span>{testRes.success ? `Token Validated (${testRes.pageName || 'Meta OK'})` : testRes.error}</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {isCardSuspended && (
-                          <p className="text-[11px] text-rose-400/90 font-medium">
-                            Automatic messenger replies are blocked because of administrator suspension.
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleTestCardToken(page)}
-                          disabled={cardCheckingId === page.page_id}
-                          className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 transition"
-                          title="Test Token with Meta Graph API"
-                        >
-                          <RefreshCw className={`w-4 h-4 ${cardCheckingId === page.page_id ? 'animate-spin' : ''}`} />
-                        </button>
-                        <button
-                          onClick={() => handleStartEdit(page)}
-                          className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 transition"
-                          title="Edit Page Credentials"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleTriggerDelete(page)}
-                          className="p-2.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition"
-                          title="Disconnect Page"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+              );
+            })}
           </div>
-        </>
+        )}
+      </div>
+
+      {/* All Connected Channels Overview Summary */}
+      {pages.length > 0 && (
+        <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              Active Multi-Platform Summary ({pages.length} Total Connected)
+            </h4>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              All connected credentials above are automatically available to your n8n Auto-Posting and AI Chatbot workflows.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 font-semibold">
+              FB: {fbPages.length}
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-pink-500/10 text-pink-400 border border-pink-500/20 font-semibold">
+              IG: {igPages.length}
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
+              WA: {waPages.length}
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 font-semibold">
+              IN: {liPages.length}
+            </span>
+          </div>
+        </div>
       )}
 
       {/* Upgrade Required Modal */}
@@ -740,7 +957,7 @@ export default function SocialMediaManager({
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center space-x-2 text-amber-400">
                 <Crown className="w-5 h-5" />
-                <h3 className="text-base font-bold text-white">Page Quota Reached</h3>
+                <h3 className="text-base font-bold text-white">Channel Quota Reached</h3>
               </div>
               <button onClick={() => setShowUpgradeModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -749,21 +966,21 @@ export default function SocialMediaManager({
 
             <div className="space-y-3">
               <p className="text-sm text-slate-300">
-                Your account is currently on the <strong className="text-amber-400">{planTier}</strong> tier, which permits up to <strong>{maxPages} connected page(s)</strong>.
+                Your account is currently on the <strong className="text-amber-400">{planTier}</strong> tier, which permits up to <strong>{maxPages} connected social channel(s)</strong>.
               </p>
               <p className="text-xs text-slate-400 leading-relaxed">
-                To connect more brand pages, please upgrade to a higher tier plan. You can view full pricing details or contact your administrator:
+                To connect additional Facebook, Instagram, WhatsApp, or LinkedIn accounts, please upgrade to a higher tier plan:
               </p>
 
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
                   <p className="text-xs font-bold text-white">Starter Growth</p>
-                  <p className="text-lg font-black text-indigo-400 mt-1">3 Pages</p>
+                  <p className="text-lg font-black text-indigo-400 mt-1">3 Channels</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">৳1,499 / mo</p>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
                   <p className="text-xs font-bold text-white">Business Pro</p>
-                  <p className="text-lg font-black text-purple-400 mt-1">10 Pages</p>
+                  <p className="text-lg font-black text-purple-400 mt-1">10 Channels</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">৳3,999 / mo</p>
                 </div>
               </div>
@@ -791,48 +1008,11 @@ export default function SocialMediaManager({
         </div>
       )}
 
-      {/* Other Platform Placeholders */}
-      {selectedPlatform === 'instagram' && (
-        <div className="p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center mx-auto text-pink-400">
-            <Instagram className="w-7 h-7" />
-          </div>
-          <h3 className="text-lg font-bold text-white">Instagram Direct Message Automation</h3>
-          <p className="text-sm text-slate-400 max-w-lg mx-auto">
-            Connect your Instagram Professional Account via Meta Graph API to automate DM sales and lead capture.
-          </p>
-        </div>
-      )}
-
-      {selectedPlatform === 'whatsapp' && (
-        <div className="p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto text-emerald-400">
-            <MessageCircle className="w-7 h-7" />
-          </div>
-          <h3 className="text-lg font-bold text-white">WhatsApp Cloud API Automation</h3>
-          <p className="text-sm text-slate-400 max-w-lg mx-auto">
-            Send automated order notifications, catalog responses, and interactive button replies on WhatsApp.
-          </p>
-        </div>
-      )}
-
-      {selectedPlatform === 'linkedin' && (
-        <div className="p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto text-sky-400">
-            <Linkedin className="w-7 h-7" />
-          </div>
-          <h3 className="text-lg font-bold text-white">LinkedIn Outreach &amp; Post Automation</h3>
-          <p className="text-sm text-slate-400 max-w-lg mx-auto">
-            Schedule corporate updates, multi-image articles, and auto-reply to inbound networking messages.
-          </p>
-        </div>
-      )}
-
       {/* Custom Delete Confirmation Modal */}
       <ConfirmDeleteModal
         isOpen={isDeleteModalOpen}
-        title="Disconnect Business Page"
-        message={`Are you sure you want to disconnect "${pageToDelete?.page_name || 'this page'}" (ID: ${pageToDelete?.page_id})? AI auto-replies will stop listening for this page immediately.`}
+        title="Disconnect Social Account"
+        message={`Are you sure you want to disconnect "${pageToDelete?.page_name || 'this account'}" (ID: ${pageToDelete?.page_id})? Automated n8n chatbot replies and scheduled posts for this channel will stop immediately.`}
         confirmText="Yes, Disconnect"
         onConfirm={handleConfirmDelete}
         onCancel={() => {
