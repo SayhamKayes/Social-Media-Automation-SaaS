@@ -12,6 +12,7 @@ import AdminNavbar from './components/admin/AdminNavbar';
 import Sidebar from './components/admin/Sidebar';
 import DashboardOverview from './components/admin/DashboardOverview';
 import SocialMediaManager from './components/admin/SocialMediaManager';
+import AutoPostScheduler from './components/admin/AutoPostScheduler';
 import ApiIntegrations from './components/admin/ApiIntegrations';
 import AIAgentConfig from './components/admin/AIAgentConfig';
 import OrdersManager from './components/admin/OrdersManager';
@@ -139,21 +140,75 @@ export default function App() {
         .select('*')
         .eq('user_id', userId);
 
-      setPages(pagesData || []);
+      const loadedPages = pagesData || [];
+      setPages(loadedPages);
 
-      /* Load orders */
-      const { data: ordersData } = await supabase
+      /* Load orders belonging to user_id OR any of the user's connected page_ids */
+      const pageIdList = loadedPages.map(p => p.page_id).filter(Boolean);
+      let rawOrders = [];
+
+      const { data: userOrders } = await supabase
         .from('orders')
         .select('*')
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-      setOrders(ordersData || []);
+      if (userOrders) {
+        rawOrders = [...userOrders];
+      }
+
+      if (pageIdList.length > 0) {
+        const { data: pageOrders } = await supabase
+          .from('orders')
+          .select('*')
+          .in('page_id', pageIdList)
+          .order('created_at', { ascending: false });
+
+        if (pageOrders) {
+          const existingIds = new Set(rawOrders.map(o => o.id || o.order_id));
+          pageOrders.forEach(po => {
+            if (!existingIds.has(po.id || po.order_id)) {
+              rawOrders.push(po);
+            }
+          });
+        }
+      }
+
+      /* Filter out platform account signup/subscription rows so store orders & revenue are 100% accurate */
+      const storeOrders = rawOrders.filter(o => {
+        const oid = String(o.order_id || '').toUpperCase();
+        return !oid.startsWith('SIGNUP-') && !oid.startsWith('SUB-');
+      });
+
+      setOrders(storeOrders);
     } catch (err) {
       console.warn("Could not fetch Supabase data:", err);
       setPages([]);
       setOrders([]);
     }
   };
+
+  /* Real-time subscription so Secured Orders, Revenue, and Plan status update instantaneously */
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !user?.id) return;
+
+    const channel = supabase
+      .channel(`realtime:client_${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        loadUserData(user.id);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'business_pages' }, () => {
+        loadUserData(user.id);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles', filter: `id=eq.${user.id}` }, () => {
+        loadUserData(user.id);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   const handleOpenAuth = (mode = 'signup', planId = 'free') => {
     setAuthMode(mode);
@@ -257,10 +312,31 @@ export default function App() {
     }
 
     if (isSupabaseConfigured() && user) {
+      let enrichedPageData = { ...pageData };
+
+      /* Auto-inherit Master AI System Prompt & Knowledge Base from Admin AI Agents when connecting a new page */
+      if (isNew) {
+        try {
+          const { data: masterSettings } = await supabase
+            .from('platform_settings')
+            .select('setting_key, setting_value')
+            .in('setting_key', ['master_ai_system_prompt', 'master_ai_knowledge_base']);
+
+          if (masterSettings && masterSettings.length > 0) {
+            const promptRow = masterSettings.find(s => s.setting_key === 'master_ai_system_prompt');
+            const kbRow = masterSettings.find(s => s.setting_key === 'master_ai_knowledge_base');
+            if (promptRow?.setting_value) enrichedPageData.system_prompt = promptRow.setting_value;
+            if (kbRow?.setting_value) enrichedPageData.knowledge_base = kbRow.setting_value;
+          }
+        } catch (err) {
+          console.warn('Could not inherit master AI agent defaults:', err);
+        }
+      }
+
       const { data, error } = await supabase
         .from('business_pages')
         .upsert({
-          ...pageData,
+          ...enrichedPageData,
           user_id: user.id,
           updated_at: new Date().toISOString()
         })
@@ -299,6 +375,60 @@ export default function App() {
       if (error) throw error;
     }
     setPages((prev) => prev.filter(p => p.page_id !== pageId));
+  };
+
+  const handleAddOrder = async (newOrderData) => {
+    if (isSupabaseConfigured() && user) {
+      try {
+        const dbPayload = {
+          user_id: user.id,
+          page_id: newOrderData.page_id || pages[0]?.page_id || null,
+          order_id: newOrderData.order_id,
+          customer_name: newOrderData.customer_name,
+          phone_number: newOrderData.phone_number,
+          email: newOrderData.email || null,
+          selected_package: newOrderData.selected_package,
+          selected_addons: newOrderData.selected_addons || null,
+          total_amount_bdt: Number(newOrderData.total_amount_bdt) || 0,
+          order_status: newOrderData.order_status || 'Confirmed',
+          customer_requirements: newOrderData.customer_requirements || null
+        };
+
+        const { data, error } = await supabase
+          .from('orders')
+          .insert(dbPayload)
+          .select();
+
+        if (!error && data && data.length > 0) {
+          setOrders((prev) => [{ ...data[0], channel: newOrderData.channel }, ...prev]);
+          return;
+        }
+      } catch (err) {
+        console.warn('Order insert notice:', err);
+      }
+    }
+    setOrders((prev) => [{ id: `ord_${Date.now()}`, ...newOrderData }, ...prev]);
+  };
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId || o.order_id === orderId
+          ? { ...o, order_status: newStatus }
+          : o
+      )
+    );
+
+    if (isSupabaseConfigured() && user) {
+      try {
+        await supabase
+          .from('orders')
+          .update({ order_status: newStatus })
+          .or(`id.eq.${orderId},order_id.eq.${orderId}`);
+      } catch (err) {
+        console.warn('Update order status notice:', err);
+      }
+    }
   };
 
   const handleDeleteOrder = async (orderId) => {
@@ -407,6 +537,12 @@ export default function App() {
                     onUpgradePlan={() => setActiveAdminTab('profile')}
                   />
                 )}
+                {activeAdminTab === 'auto-post' && (
+                  <AutoPostScheduler
+                    pages={pages}
+                    userProfile={userProfile}
+                  />
+                )}
                 {activeAdminTab === 'api-integrations' && (
                   <ApiIntegrations
                     pages={pages}
@@ -423,6 +559,9 @@ export default function App() {
                 {activeAdminTab === 'orders' && (
                   <OrdersManager
                     orders={orders}
+                    pages={pages}
+                    onAddOrder={handleAddOrder}
+                    onUpdateOrderStatus={handleUpdateOrderStatus}
                     onDeleteOrder={handleDeleteOrder}
                   />
                 )}
