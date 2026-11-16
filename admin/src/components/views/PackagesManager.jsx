@@ -149,12 +149,6 @@ export default function PackagesManager({
                     <span className="text-xl font-black text-white">{tier.price_bdt}</span>
                     <span className="text-xs text-slate-400 font-medium">{tier.period}</span>
                   </div>
-                  <p className="text-[11px] text-purple-300 font-semibold mt-1 flex items-center justify-between">
-                    <span>Allowed Pages Quota:</span>
-                    <strong className="text-white px-2 py-0.5 rounded bg-purple-950 border border-purple-800/60">
-                      {displayPages}
-                    </strong>
-                  </p>
                 </div>
 
                 <div className="space-y-2 pt-2">
