@@ -10,7 +10,8 @@ import {
   CheckCircle2,
   Cpu,
   Layers,
-  Info
+  Info,
+  Globe
 } from 'lucide-react';
 
 export default function SystemSettings({ 
@@ -21,7 +22,10 @@ export default function SystemSettings({
   const [metaAppSecret, setMetaAppSecret] = useState('');
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('https://social-automation-saas-dfg4.onrender.com/webhook/facebook-messenger-saas');
+  const [autoPostWebhookUrl, setAutoPostWebhookUrl] = useState('https://social-automation-saas-dfg4.onrender.com/webhook/social-auto-post');
   const [verifyToken, setVerifyToken] = useState('socialsaas_secret');
+  const [liveClientHostUrl, setLiveClientHostUrl] = useState('');
+  const [liveAdminHostUrl, setLiveAdminHostUrl] = useState('');
 
   const [copiedKey, setCopiedKey] = useState(null);
   const [savedNotice, setSavedNotice] = useState(false);
@@ -33,7 +37,10 @@ export default function SystemSettings({
       if (settings.meta_app_secret) setMetaAppSecret(settings.meta_app_secret);
       if (settings.gemini_api_key) setGeminiApiKey(settings.gemini_api_key);
       if (settings.webhook_url) setWebhookUrl(settings.webhook_url);
+      if (settings.autopost_webhook_url) setAutoPostWebhookUrl(settings.autopost_webhook_url);
       if (settings.verify_token) setVerifyToken(settings.verify_token);
+      if (settings.live_client_host_url !== undefined) setLiveClientHostUrl(settings.live_client_host_url);
+      if (settings.live_admin_host_url !== undefined) setLiveAdminHostUrl(settings.live_admin_host_url);
     }
   }, [settings]);
 
@@ -52,7 +59,10 @@ export default function SystemSettings({
         meta_app_secret: metaAppSecret.trim(),
         gemini_api_key: geminiApiKey.trim(),
         webhook_url: webhookUrl.trim(),
-        verify_token: verifyToken.trim()
+        autopost_webhook_url: autoPostWebhookUrl.trim(),
+        verify_token: verifyToken.trim(),
+        live_client_host_url: liveClientHostUrl.trim().replace(/\/+$/, ''),
+        live_admin_host_url: liveAdminHostUrl.trim().replace(/\/+$/, '')
       });
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 3000);
@@ -143,6 +153,32 @@ export default function SystemSettings({
               </div>
             </div>
           </div>
+
+          <div className="pt-3 border-t border-slate-800/80">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-purple-300 mb-1">
+              Workflow 2: Master Auto-Post, Google Sheet &amp; Google Drive Sync Webhook URL
+            </label>
+            <p className="text-[11px] text-slate-400 mb-2">
+              Central n8n endpoint that receives user PC photo uploads, uploads them to the user's Google Drive folder, pastes the Drive link into their Google Sheet, and publishes to Facebook, Instagram, and LinkedIn.
+            </p>
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                value={autoPostWebhookUrl}
+                onChange={(e) => setAutoPostWebhookUrl(e.target.value)}
+                placeholder="https://your-n8n-domain.com/webhook/social-auto-post"
+                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs font-mono focus:outline-none focus:border-purple-500"
+              />
+              <button
+                type="button"
+                onClick={() => handleCopy(autoPostWebhookUrl, 'autopost_url')}
+                className="p-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white transition shrink-0"
+                title="Copy Auto-Post Webhook URL"
+              >
+                {copiedKey === 'autopost_url' ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
         </div>
         {/* Meta Platform API Credentials */}
         <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
@@ -223,6 +259,51 @@ export default function SystemSettings({
             <p className="text-[11px] text-slate-500 mt-1">
               Powers LangChain conversational sales reasoning across all client business pages.
             </p>
+          </div>
+        </div>
+
+        {/* Live Deployed Portal URLs */}
+        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+              <Globe className="w-4 h-4 text-purple-400" />
+              <span>Live Deployed Portal URLs (Client &amp; Admin Portals)</span>
+            </h3>
+            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">
+              New Window Sync
+            </span>
+          </div>
+
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            When you deploy to your live server (e.g. Vercel or custom domain), enter both live URLs below. The <strong>Client Portal</strong> and <strong>Admin Portal</strong> links across both applications will automatically open these live URLs in a new browser window.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                Live Client Portal URL
+              </label>
+              <input
+                type="url"
+                placeholder="https://your-client-portal.vercel.app"
+                value={liveClientHostUrl}
+                onChange={(e) => setLiveClientHostUrl(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-purple-500 transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                Live Admin Portal URL
+              </label>
+              <input
+                type="url"
+                placeholder="https://your-admin-portal.vercel.app"
+                value={liveAdminHostUrl}
+                onChange={(e) => setLiveAdminHostUrl(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-purple-500 transition"
+              />
+            </div>
           </div>
         </div>
 
