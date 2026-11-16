@@ -113,8 +113,11 @@ export default function AuthModal({
         });
         if (error) throw error;
 
-        /* Auto sync into public.user_profiles */
+        /* Auto sync into public.user_profiles and global orders/leads */
         const maxPages = selectedPlan === 'starter' ? 3 : selectedPlan === 'business' ? 10 : selectedPlan === 'agency' ? 9999 : 1;
+        const planMeta = planOptions.find(p => p.id === selectedPlan) || planOptions[0];
+        const planPriceNum = Number(String(planMeta.price).replace(/[^0-9]/g, '')) || 0;
+
         if (data.user) {
           try {
             await supabase.from('user_profiles').upsert({
@@ -126,6 +129,19 @@ export default function AuthModal({
               max_pages: maxPages,
               status: 'active',
               updated_at: new Date().toISOString()
+            });
+
+            /* Also log new user signup (including Free Trial) into global orders & leads */
+            await supabase.from('orders').insert({
+              user_id: data.user.id,
+              order_id: `SIGNUP-${selectedPlan.toUpperCase()}-${data.user.id.slice(0, 5).toUpperCase()}`,
+              customer_name: fullName.trim() || data.user.email.split('@')[0],
+              phone_number: data.user.email,
+              email: data.user.email,
+              selected_package: `${planMeta.name} (${selectedPlan === 'free' ? '1 Month Free Trial' : 'SaaS Subscription'})`,
+              total_amount_bdt: selectedPlan === 'free' ? 0 : planPriceNum,
+              order_status: selectedPlan === 'free' ? 'Free Trial Active' : 'Pending Payment',
+              customer_requirements: 'Platform Account Registration'
             });
           } catch (profileErr) {
             console.warn('Profile sync fallback notice:', profileErr);
@@ -146,6 +162,33 @@ export default function AuthModal({
           password
         });
         if (error) throw error;
+
+        /* Ensure signed-in user exists in user_profiles */
+        if (data.user) {
+          try {
+            const { data: existingProfile } = await supabase
+              .from('user_profiles')
+              .select('id')
+              .eq('id', data.user.id)
+              .maybeSingle();
+
+            if (!existingProfile) {
+              await supabase.from('user_profiles').upsert({
+                id: data.user.id,
+                email: data.user.email,
+                full_name: data.user.user_metadata?.full_name || data.user.email.split('@')[0],
+                role: 'user',
+                plan_tier: 'free',
+                max_pages: 1,
+                status: 'active',
+                updated_at: new Date().toISOString()
+              });
+            }
+          } catch (syncErr) {
+            console.warn('Login profile check notice:', syncErr);
+          }
+        }
+
         onAuthSuccess(data.user);
         onClose();
       }
