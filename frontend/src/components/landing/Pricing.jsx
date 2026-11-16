@@ -12,74 +12,90 @@ const DEFAULT_PACKAGES = [
     id: 'free',
     name: 'Free Trial',
     badge: 'Default',
+    badge_color: 'bg-slate-800 text-slate-300',
     price_bdt: '৳0',
     price_usd: '$0',
     period: '1 Month',
     pages_allowed: 1,
     description: 'Introductory plan for small pages testing AI sales automation.',
     features: [
-      '1 Facebook Business Page',
-      'Standard Google Gemini 1.5 Flash AI',
-      'Basic Product Catalog & FAQ lookup',
-      'Standard Messenger Support'
+      'Connect Account: 1 Social Account (FB)',
+      'Message Credit: 5K / Month',
+      'Bot AI Token: 50K / Month',
+      'Social Auto-Post: 5 / Month',
+      'Google Gemini AI Sales Consultant',
+      'Google Sheets Product & FAQ Lookup',
+      'Automated Messenger Order Capture'
     ],
-    is_popular: false
+    is_popular: false,
+    display_order: 1
   },
   {
     id: 'starter',
     name: 'Starter Growth',
     badge: 'Popular',
+    badge_color: 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
     price_bdt: '৳1,499',
     price_usd: '$15',
     period: '/ mo',
     pages_allowed: 3,
     description: 'Ideal for independent shops and boutique ecommerce brands.',
     features: [
-      'Up to 3 Connected Pages (FB & Instagram)',
-      'Unlimited AI Messenger Inquiries',
-      'Custom Sales Consultant Personality',
-      'Automated Google Sheets Order Capture',
-      'Basic Analytics & Lead Export'
+      'Connect Account: 3 Social Accounts (FB & IG)',
+      'Message Credit: 50K / Month',
+      'Bot AI Token: 500K / Month',
+      'Social Auto-Post: 20 / Month',
+      'Messenger & Instagram DM Order Capture',
+      'PC Photo to Google Drive & Sheet Auto-Sync',
+      'Automated Sales Consultant Funnel'
     ],
-    is_popular: true
+    is_popular: true,
+    display_order: 2
   },
   {
     id: 'business',
     name: 'Business Pro',
     badge: 'High Value',
+    badge_color: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
     price_bdt: '৳3,999',
     price_usd: '$39',
     period: '/ mo',
     pages_allowed: 10,
     description: 'High-volume businesses needing multi-channel auto-sales bots.',
     features: [
-      'Up to 10 Connected Business Pages',
-      'Facebook, Instagram & WhatsApp Ready',
-      'Custom Knowledge Base & Product Engines',
-      'Direct WhatsApp Order Notification Dispatch',
-      'Dedicated RLS Database Isolation',
-      'Priority AI Token Execution'
+      'Connect Account: 10 Social Accounts (FB, IG, WA, LinkedIn)',
+      'Message Credit: 250K / Month',
+      'Bot AI Token: 2.5M / Month',
+      'Social Auto-Post: 60 / Month',
+      'Omnichannel Messenger, IG & WhatsApp Order Panel',
+      'PC Photo to Google Drive & Sheet Auto-Post',
+      'Priority Gemini AI Response Speed'
     ],
-    is_popular: false
+    is_popular: false,
+    display_order: 3
   },
   {
     id: 'agency',
     name: 'Agency Enterprise',
     badge: 'Master Tier',
+    badge_color: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
     price_bdt: '৳9,999',
     price_usd: '$99',
     period: '/ mo',
     pages_allowed: 9999,
     description: 'For digital agencies managing dozens of client brand pages.',
     features: [
-      'Unlimited Connected Social Accounts',
-      'Full Multi-Tenant Sub-Client Management',
-      'Custom System Prompt Library Presets',
-      'Master Lead Audit & CRM Integration',
-      '24/7 Priority VIP Uptime Guarantee',
-      'Dedicated Workflow Tuning'
+      'Connect Account: Unlimited Social Accounts',
+      'Message Credit: 10M / Month',
+      'Bot AI Token: 10M / Month',
+      'Social Auto-Post: Unlimited / Month',
+      'Manage Unlimited Client Brand Pages & Prompts',
+      'Custom Gemini, Meta & LinkedIn API Key Override',
+      'Omnichannel Orders & Leads Export (FB, IG, WA)',
+      '24/7 Priority VIP Uptime & Workflow Support'
     ],
-    is_popular: false
+    is_popular: false,
+    display_order: 4
   }
 ];
 
@@ -96,7 +112,7 @@ export default function Pricing({
   const tierRanks = { free: 1, starter: 2, business: 3, agency: 4 };
   const currentRank = userPlanTier ? (tierRanks[userPlanTier] || 1) : 0;
 
-  /* Function to load live packages from Supabase */
+  /* Function to load live packages from Supabase and auto-upgrade legacy feature rows */
   const loadPackages = async () => {
     if (!isSupabaseConfigured()) return;
     try {
@@ -106,7 +122,26 @@ export default function Pricing({
         .order('display_order', { ascending: true });
 
       if (!error && data && data.length > 0) {
-        setPackages(data);
+        const hasLegacyFeatures = data.some(pkg => {
+          const feats = Array.isArray(pkg.features) ? pkg.features.join(' ') : '';
+          return (
+            feats.includes('Sub-Client Management') ||
+            feats.includes('Master Lead Audit') ||
+            feats.includes('Knowledge Library') ||
+            feats.includes('Knowledge Packs') ||
+            feats.includes('1K / Month') ||
+            (pkg.id === 'agency' && feats.includes('1M / Month')) ||
+            !feats.includes('Message Credit:')
+          );
+        });
+
+        if (hasLegacyFeatures) {
+          /* Auto-sync updated package definitions into Supabase */
+          await supabase.from('subscription_packages').upsert(DEFAULT_PACKAGES, { onConflict: 'id' });
+          setPackages(DEFAULT_PACKAGES);
+        } else {
+          setPackages(data);
+        }
       }
     } catch (err) {
       console.warn('Using cached landing pricing plans:', err);
@@ -221,14 +256,6 @@ export default function Pricing({
                         <span className="text-3xl font-black text-white">{tier.price_bdt}</span>
                         <span className="text-xs text-slate-400 font-semibold">{tier.period || '/ mo'}</span>
                       </div>
-
-                      {/* Allowed Pages quota highlight */}
-                      <div className="mt-3 py-1.5 px-2.5 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between text-xs">
-                        <span className="text-slate-400 text-[11px]">Social Quota:</span>
-                        <strong className={`font-bold text-xs ${isCurrentPlan ? 'text-emerald-400' : 'text-indigo-300'}`}>
-                          {displayPages}
-                        </strong>
-                      </div>
                     </div>
 
                     {/* Feature Bullets */}
@@ -281,14 +308,6 @@ export default function Pricing({
                         {tier.id === 'free' ? 'Start Free Trial' : `Select ${tier.name}`}
                       </button>
                     )}
-
-                    <p className="text-center text-[10px] text-slate-500 mt-2">
-                      {isCurrentPlan ? (
-                        <span className="text-emerald-400 font-medium">Your account is currently on this plan</span>
-                      ) : (
-                        isUnlimited ? 'Unlimited accounts' : `Strictly capped to ${displayPages}`
-                      )}
-                    </p>
                   </div>
                 </div>
               );
