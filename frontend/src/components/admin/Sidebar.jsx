@@ -2,8 +2,9 @@ import React from 'react';
 import { 
   LayoutDashboard, 
   Share2, 
+  CalendarClock,
   KeyRound, 
-  Bot, 
+  FileSpreadsheet, 
   ShoppingBag, 
   MessageSquareCode, 
   UserCheck,
@@ -14,8 +15,9 @@ export default function Sidebar({ activeTab, setActiveTab, ordersCount = 0 }) {
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'social-media', label: 'Social Media', icon: Share2 },
+    { id: 'auto-post', label: 'Auto Post & Scheduler', icon: CalendarClock },
     { id: 'api-integrations', label: 'Social Media APIs', icon: KeyRound },
-    { id: 'ai-config', label: 'AI Agent & Prompts', icon: Bot },
+    { id: 'ai-config', label: 'Google Sheets Config', icon: FileSpreadsheet },
     { id: 'orders', label: 'Orders & Leads', icon: ShoppingBag, badge: ordersCount > 0 ? ordersCount : null },
     { id: 'simulator', label: 'Chat Simulator', icon: MessageSquareCode },
     { id: 'profile', label: 'Profile & Subscription', icon: UserCheck },
