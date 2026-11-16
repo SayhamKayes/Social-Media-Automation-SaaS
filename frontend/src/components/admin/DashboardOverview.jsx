@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Facebook, 
   ShoppingBag, 
@@ -10,10 +10,38 @@ import {
   KeyRound,
   Sparkles,
   ShieldAlert,
-  AlertCircle
+  AlertCircle,
+  Clock
 } from 'lucide-react';
+import { 
+  getLocalQuotaUsage, 
+  fetchSupabaseQuotaUsage, 
+  getEffectiveUserQuota 
+} from '../../lib/knowledgeLibrary';
 
 export default function DashboardOverview({ pages = [], orders = [], userProfile = null, onNavigate }) {
+  const userId = userProfile?.id || 'default';
+  const [usageState, setUsageState] = useState(() => getLocalQuotaUsage(userId));
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchSupabaseQuotaUsage(userId).then((fresh) => {
+      if (isMounted && fresh) setUsageState(fresh);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [userId]);
+
+  const effectiveQuota = getEffectiveUserQuota(userProfile, usageState);
+  const msgPercent = Math.min(100, Math.round((effectiveQuota.messagesUsed / effectiveQuota.messageLimit) * 100));
+  const tokenPercent = Math.min(100, Math.round((effectiveQuota.tokensUsed / effectiveQuota.tokenLimit) * 100));
+  const postPercent = Math.min(100, Math.round((effectiveQuota.postsUsed / effectiveQuota.postLimit) * 100));
+  const resetDateFormatted = effectiveQuota.nextResetDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
   const isUserSuspended = userProfile?.status === 'suspended';
   const expiresAt = userProfile?.subscription_expires_at 
     ? new Date(userProfile.subscription_expires_at) 
@@ -169,6 +197,38 @@ export default function DashboardOverview({ pages = [], orders = [], userProfile
         </div>
       )}
 
+      {/* Top Banner Alert when AI Token Limit is Exhausted */}
+      {effectiveQuota.isTokenExhausted && !isUserSuspended && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-rose-500/15 border border-rose-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-rose-200 shadow-2xl">
+          <div className="flex items-start sm:items-center space-x-3.5">
+            <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-6 h-6 text-rose-400" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-black uppercase tracking-wider text-rose-300">
+                  AI Token Limit Exhausted (0 Tokens Remaining)
+                </p>
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30 flex items-center space-x-1">
+                  <Clock className="w-3 h-3" />
+                  <span>Resets on: {resetDateFormatted}</span>
+                </span>
+              </div>
+              <p className="text-xs text-rose-200/90 mt-1 leading-relaxed">
+                Your monthly Bot AI Token allowance ({effectiveQuota.tokenLimit.toLocaleString()} Tokens) has been fully consumed. Your token quota will automatically reset on <strong>{resetDateFormatted}</strong>, or you can upgrade / add payment now to top up extra tokens immediately.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate('profile')}
+            className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shrink-0 transition shadow-lg shadow-rose-600/30 flex items-center justify-center space-x-1.5 self-start sm:self-auto"
+          >
+            <span>Add Payment / Top-Up Tokens</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       <div>
         <h2 className="text-2xl font-bold text-white tracking-tight">Dashboard Overview</h2>
         <p className="text-sm text-slate-400 mt-1">
@@ -193,6 +253,111 @@ export default function DashboardOverview({ pages = [], orders = [], userProfile
             </div>
           );
         })}
+      </div>
+
+      {/* Monthly Plan Quota & AI Token Meter */}
+      <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Sparkles className="w-4 h-4 text-indigo-400" />
+            <h3 className="text-sm font-bold text-white">
+              Monthly Plan Quotas ({effectiveQuota.planName} • {effectiveQuota.priceBDT})
+            </h3>
+            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-[11px] font-semibold">
+              <Clock className="w-3 h-3" />
+              <span>Next Token Reset: {resetDateFormatted}</span>
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate('profile')}
+            className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center space-x-1 self-start sm:self-auto"
+          >
+            <span>Increase Quota / Upgrade Plan</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Message Credit Meter */}
+          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400 font-semibold">Message Credit</span>
+              <span className="font-mono font-bold text-emerald-400">
+                {effectiveQuota.messagesUsed.toLocaleString()} / {effectiveQuota.messageLimit.toLocaleString()}
+              </span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all"
+                style={{ width: `${Math.max(4, msgPercent)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+              <span>Remaining: <strong className="text-emerald-300 font-mono">{effectiveQuota.messagesRemaining.toLocaleString()}</strong></span>
+              <span>Resets: {resetDateFormatted}</span>
+            </div>
+          </div>
+
+          {/* Bot AI Token Meter */}
+          <div className={`p-3.5 rounded-xl bg-slate-950 border space-y-2 ${
+            effectiveQuota.isTokenExhausted ? 'border-rose-500/50 bg-rose-950/10' : 'border-slate-800'
+          }`}>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400 font-semibold flex items-center space-x-1.5">
+                <span>Bot AI Token Quota</span>
+                {effectiveQuota.isTokenExhausted && (
+                  <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[9px] font-bold uppercase border border-rose-500/30">
+                    Exhausted
+                  </span>
+                )}
+              </span>
+              <span className={`font-mono font-bold ${effectiveQuota.isTokenExhausted ? 'text-rose-400' : 'text-purple-300'}`}>
+                {effectiveQuota.tokensUsed.toLocaleString()} / {effectiveQuota.tokenLimit.toLocaleString()}
+              </span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${effectiveQuota.isTokenExhausted ? 'bg-rose-500' : 'bg-purple-500'}`}
+                style={{ width: `${Math.max(4, tokenPercent)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+              <span>
+                Remaining:{' '}
+                <strong className={`font-mono ${effectiveQuota.isTokenExhausted ? 'text-rose-400' : 'text-purple-300'}`}>
+                  {effectiveQuota.tokensRemaining.toLocaleString()} Tokens
+                </strong>
+              </span>
+              <span>Resets: {resetDateFormatted}</span>
+            </div>
+          </div>
+
+          {/* Social Auto-Post Meter */}
+          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400 font-semibold">Social Auto-Posting</span>
+              <span className="font-mono font-bold text-amber-300">
+                {effectiveQuota.postsUsed.toLocaleString()} / {effectiveQuota.postLimit >= 9999 ? 'Unlimited' : effectiveQuota.postLimit}
+              </span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-amber-500 rounded-full transition-all"
+                style={{ width: `${Math.max(4, postPercent)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+              <span>
+                Remaining:{' '}
+                <strong className="text-amber-300 font-mono">
+                  {effectiveQuota.postLimit >= 9999 ? 'Unlimited' : effectiveQuota.postsRemaining.toLocaleString()}
+                </strong>
+              </span>
+              <span>Resets: {resetDateFormatted}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Quick Actions & Recent Summary */}
@@ -289,7 +454,7 @@ export default function DashboardOverview({ pages = [], orders = [], userProfile
             </div>
             <div className="flex items-start space-x-2">
               <span className="w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-[10px] mt-0.5">3</span>
-              <span>Configure AI Consultant tone &amp; knowledge base</span>
+              <span>Map Google Sheets IDs for products &amp; orders</span>
             </div>
             <div className="flex items-start space-x-2">
               <span className="w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-[10px] mt-0.5">4</span>
