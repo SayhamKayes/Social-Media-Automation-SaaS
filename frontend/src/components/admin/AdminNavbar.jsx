@@ -1,7 +1,27 @@
-import React from 'react';
-import { Bot, LogOut, ExternalLink, ShieldCheck, ShieldAlert, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bot, LogOut, ExternalLink, ShieldCheck, ShieldAlert, AlertCircle, Sparkles } from 'lucide-react';
+import { getLocalQuotaUsage, fetchSupabaseQuotaUsage, getEffectiveUserQuota } from '../../lib/knowledgeLibrary';
 
 export default function AdminNavbar({ user, userProfile = null, onLogout, onGoToLanding }) {
+  const userId = user?.id || userProfile?.id || 'default';
+  const [usageState, setUsageState] = useState(() => getLocalQuotaUsage(userId));
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchSupabaseQuotaUsage(userId).then((fresh) => {
+      if (isMounted && fresh) setUsageState(fresh);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [userId]);
+
+  const effectiveQuota = getEffectiveUserQuota(userProfile, usageState);
+  const resetDateFormatted = effectiveQuota.nextResetDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
+  });
+
   const isUserSuspended = userProfile?.status === 'suspended';
   const expiresAt = userProfile?.subscription_expires_at 
     ? new Date(userProfile.subscription_expires_at) 
@@ -29,6 +49,18 @@ export default function AdminNavbar({ user, userProfile = null, onLogout, onGoTo
           <span>RLS Protected</span>
         </span>
 
+        {effectiveQuota.isTokenExhausted ? (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-xs font-bold border border-rose-500/30 ml-2 animate-pulse" title={`Token Limit Reset Date: ${resetDateFormatted}`}>
+            <AlertCircle className="w-3.5 h-3.5" />
+            <span>Token Limit Exhausted (Resets {resetDateFormatted})</span>
+          </span>
+        ) : (
+          <span className="hidden md:inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 text-xs font-semibold border border-purple-500/30 ml-2" title={`Next Reset: ${resetDateFormatted}`}>
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span>{effectiveQuota.tokensRemaining.toLocaleString()} Tokens Left (Resets {resetDateFormatted})</span>
+          </span>
+        )}
+
         {isUserSuspended ? (
           <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-xs font-bold border border-rose-500/30 ml-2 animate-pulse">
             <ShieldAlert className="w-3.5 h-3.5" />
@@ -50,7 +82,7 @@ export default function AdminNavbar({ user, userProfile = null, onLogout, onGoTo
       <div className="flex items-center space-x-4">
         <div className="text-right hidden sm:block">
           <p className="text-xs font-semibold text-white">{user?.email || 'user@example.com'}</p>
-          <p className="text-[10px] text-slate-400 font-mono">Tenant ID: {user?.id?.slice(0, 8)}...</p>
+          <p className="text-[10px] text-slate-400 font-mono">UID: {user?.id?.slice(0, 8)}...</p>
         </div>
 
         <button
