@@ -4,6 +4,8 @@ import {
   Search, 
   Facebook, 
   Instagram, 
+  MessageCircle,
+  Linkedin,
   ShieldCheck, 
   ShieldAlert, 
   Trash2, 
@@ -23,6 +25,20 @@ import {
 import ConfirmDeleteModal from '../ConfirmDeleteModal';
 import { verifyMetaPageToken } from '../../lib/metaValidator';
 
+const detectAppPlatform = (page) => {
+  if (!page) return 'facebook';
+  if (page.platform) return page.platform.toLowerCase();
+  const vt = String(page.verify_token || '').toLowerCase();
+  if (vt.startsWith('ig:') || vt.includes('instagram')) return 'instagram';
+  if (vt.startsWith('wa:') || vt.includes('whatsapp')) return 'whatsapp';
+  if (vt.startsWith('li:') || vt.includes('linkedin')) return 'linkedin';
+  const name = String(page.page_name || '').toLowerCase();
+  if (name.startsWith('[ig]') || name.includes('(instagram)')) return 'instagram';
+  if (name.startsWith('[wa]') || name.includes('(whatsapp)')) return 'whatsapp';
+  if (name.startsWith('[in]') || name.includes('(linkedin)')) return 'linkedin';
+  return 'facebook';
+};
+
 export default function PagesOversight({ 
   pages = [], 
   users = [],
@@ -31,6 +47,7 @@ export default function PagesOversight({
   onDeletePage
 }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [platformFilter, setPlatformFilter] = useState('ALL');
   const [notice, setNotice] = useState('');
   const [pageToDelete, setPageToDelete] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -53,12 +70,14 @@ export default function PagesOversight({
   };
 
   const filteredPages = pages.filter((p) => {
+    const plat = detectAppPlatform(p);
+    const matchesPlatform = platformFilter === 'ALL' || plat === platformFilter.toLowerCase();
     const ownerEmail = getUserEmail(p.user_id).toLowerCase();
     const matchesSearch = 
       (p.page_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.page_id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       ownerEmail.includes(searchQuery.toLowerCase());
-    return matchesSearch;
+    return matchesPlatform && matchesSearch;
   });
 
   const handleOpenDetailModal = (page) => {
@@ -110,16 +129,40 @@ export default function PagesOversight({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-white tracking-tight">Global Connected Pages Oversight</h2>
+          <h2 className="text-2xl font-black text-white tracking-tight">Connected Apps &amp; Social Channels</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Audit and manage every Facebook and social media channel connected across all tenant accounts.
+            Audit and manage every Facebook, Instagram, WhatsApp, and LinkedIn app connected across all tenant accounts.
           </p>
         </div>
         <div className="flex items-center space-x-2">
           <span className="text-xs px-3 py-1.5 rounded-xl bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold">
-            Total Connected: {pages.length}
+            Total Connected Apps: {pages.length}
           </span>
         </div>
+      </div>
+
+      {/* Platform Filter Tabs */}
+      <div className="flex flex-wrap items-center gap-2">
+        {[
+          { id: 'ALL', label: `All Connected Apps (${pages.length})` },
+          { id: 'facebook', label: `Facebook (${pages.filter(p => detectAppPlatform(p) === 'facebook').length})` },
+          { id: 'instagram', label: `Instagram (${pages.filter(p => detectAppPlatform(p) === 'instagram').length})` },
+          { id: 'whatsapp', label: `WhatsApp (${pages.filter(p => detectAppPlatform(p) === 'whatsapp').length})` },
+          { id: 'linkedin', label: `LinkedIn (${pages.filter(p => detectAppPlatform(p) === 'linkedin').length})` },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setPlatformFilter(tab.id)}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+              platformFilter === tab.id
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {notice && (
@@ -135,7 +178,7 @@ export default function PagesOversight({
           <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
           <input
             type="text"
-            placeholder="Search by Page Name, Numeric Page ID, or Owner Email..."
+            placeholder="Search by Connected App Name, Account/Page ID, or Owner Email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition"
@@ -143,17 +186,17 @@ export default function PagesOversight({
         </div>
       </div>
 
-      {/* Pages Table */}
+      {/* Connected Apps Table */}
       <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 uppercase tracking-wider text-[10px] font-bold">
-                <th className="py-3.5 px-4">Page Name &amp; Channel</th>
-                <th className="py-3.5 px-4">Numeric Page ID</th>
+                <th className="py-3.5 px-4">Connected App &amp; Platform</th>
+                <th className="py-3.5 px-4">Account / Channel ID</th>
                 <th className="py-3.5 px-4">Tenant Owner Email</th>
                 <th className="py-3.5 px-4">Token Status</th>
-                <th className="py-3.5 px-4">Bot Status</th>
+                <th className="py-3.5 px-4">Workflow Status</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -161,7 +204,7 @@ export default function PagesOversight({
               {filteredPages.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="py-12 text-center text-slate-500">
-                    No connected business pages found.
+                    No connected apps found matching current filter.
                   </td>
                 </tr>
               ) : (
@@ -169,17 +212,38 @@ export default function PagesOversight({
                   const ownerEmail = getUserEmail(page.user_id);
                   const hasToken = Boolean(page.page_access_token && page.page_access_token.length > 20);
                   const status = page.bot_status || (page.is_active !== false ? 'ACTIVE' : 'INACTIVE');
+                  const plat = detectAppPlatform(page);
+                  const cleanVerify = String(page.verify_token || 'socialsaas_secret').replace(/^(fb|ig|wa|li):/i, '');
 
                   return (
                     <tr key={page.page_id} className="hover:bg-slate-800/40 transition">
                       <td className="py-3.5 px-4">
                         <div className="flex items-center space-x-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
-                            <Facebook className="w-4 h-4" />
-                          </div>
+                          {plat === 'instagram' ? (
+                            <div className="w-7 h-7 rounded-lg bg-pink-500/10 flex items-center justify-center text-pink-400 shrink-0">
+                              <Instagram className="w-4 h-4" />
+                            </div>
+                          ) : plat === 'whatsapp' ? (
+                            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                              <MessageCircle className="w-4 h-4" />
+                            </div>
+                          ) : plat === 'linkedin' ? (
+                            <div className="w-7 h-7 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-400 shrink-0">
+                              <Linkedin className="w-4 h-4" />
+                            </div>
+                          ) : (
+                            <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
+                              <Facebook className="w-4 h-4" />
+                            </div>
+                          )}
                           <div>
-                            <p className="font-bold text-white">{page.page_name || 'Unnamed Page'}</p>
-                            <p className="text-[10px] text-slate-500 font-mono">Verify: {page.verify_token || 'socialsaas_secret'}</p>
+                            <div className="flex items-center space-x-1.5">
+                              <p className="font-bold text-white">{page.page_name || 'Connected App'}</p>
+                              <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                                {plat}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 font-mono">Verify: {cleanVerify}</p>
                           </div>
                         </div>
                       </td>
