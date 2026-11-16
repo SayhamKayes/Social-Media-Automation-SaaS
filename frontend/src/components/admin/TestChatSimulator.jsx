@@ -1,7 +1,34 @@
-import React, { useState } from 'react';
-import { Send, Bot, User, RefreshCw, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Send, Bot, User, RefreshCw, Sparkles, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { 
+  getLocalQuotaUsage, 
+  fetchSupabaseQuotaUsage, 
+  getEffectiveUserQuota, 
+  incrementQuotaUsage 
+} from '../../lib/knowledgeLibrary';
 
 export default function TestChatSimulator({ selectedPage, userProfile = null, onUpgradePlan }) {
+  const userId = userProfile?.id || 'default';
+  const [usage, setUsage] = useState(() => getLocalQuotaUsage(userId));
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchSupabaseQuotaUsage(userId).then((fresh) => {
+      if (isMounted && fresh) setUsage(fresh);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [userId]);
+
+  const effectiveQuota = getEffectiveUserQuota(userProfile, usage);
+  const resetDateFormatted = effectiveQuota.nextResetDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  const isQuotaExhausted = effectiveQuota.isMessageExhausted || effectiveQuota.isTokenExhausted;
+
   const expiresAt = userProfile?.subscription_expires_at 
     ? new Date(userProfile.subscription_expires_at) 
     : userProfile?.created_at 
@@ -22,7 +49,7 @@ export default function TestChatSimulator({ selectedPage, userProfile = null, on
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
     if (!inputText.trim()) return;
 
@@ -36,10 +63,28 @@ export default function TestChatSimulator({ selectedPage, userProfile = null, on
       return;
     }
 
+    if (isQuotaExhausted) {
+      setMessages((prev) => [
+        ...prev,
+        { sender: 'user', text: inputText.trim() },
+        { sender: 'bot', text: `Token / Message Limit Reached: Your monthly quota (${effectiveQuota.tokenLimit.toLocaleString()} Tokens) has been fully used. Your quota will automatically reset on ${resetDateFormatted}, or you can add payment / upgrade your plan to top up extra tokens immediately.` }
+      ]);
+      setInputText('');
+      return;
+    }
+
     const userMsg = inputText.trim();
     setMessages((prev) => [...prev, { sender: 'user', text: userMsg }]);
     setInputText('');
     setIsTyping(true);
+
+    const estimatedTokens = Math.max(180, userMsg.length * 6 + 240);
+    const updatedUsage = await incrementQuotaUsage(userProfile?.id || 'default', {
+      messages: 1,
+      tokens: estimatedTokens,
+      posts: 0
+    });
+    setUsage(updatedUsage);
 
     // Simulate AI Sales Consultant response matching the n8n prompt logic
     setTimeout(() => {
@@ -124,7 +169,18 @@ export default function TestChatSimulator({ selectedPage, userProfile = null, on
               <p className="text-[10px] text-emerald-400 font-medium">● Typically replies instantly</p>
             </div>
           </div>
-          <span className="text-[11px] font-mono text-slate-500">Preview Mode</span>
+          <div className="flex items-center space-x-2 text-[11px] font-mono">
+            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Msg Left: {effectiveQuota.messagesRemaining.toLocaleString()}
+            </span>
+            <span className={`px-2 py-0.5 rounded border ${
+              effectiveQuota.isTokenExhausted
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold'
+                : 'bg-purple-500/10 text-purple-300 border-purple-500/20'
+            }`}>
+              Tokens Left: {effectiveQuota.tokensRemaining.toLocaleString()} / {effectiveQuota.tokenLimit.toLocaleString()} (Resets {resetDateFormatted})
+            </span>
+          </div>
         </div>
 
         {/* Message Bubble Feed */}
