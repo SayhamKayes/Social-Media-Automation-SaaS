@@ -42,6 +42,7 @@ const detectAppPlatform = (page) => {
 export default function PagesOversight({ 
   pages = [], 
   users = [],
+  settings = {},
   onTogglePageStatus,
   onUpdatePageBotStatus,
   onDeletePage
@@ -490,6 +491,44 @@ export default function PagesOversight({
                 </span>
               </div>
             </div>
+
+            {/* Client Uploaded Business Identity & Knowledge Base Preview */}
+            {(() => {
+              let biz = null;
+              try {
+                const raw = settings?.[`business_profile_${selectedPage.page_id}`];
+                if (raw) biz = JSON.parse(raw);
+              } catch {
+                biz = null;
+              }
+              if (!biz && !selectedPage.knowledge_base) return null;
+              return (
+                <div className="p-3.5 rounded-xl bg-slate-950 border border-purple-500/30 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider">
+                      Client Business Profile &amp; Knowledge Base
+                    </span>
+                    {biz?.aiVerified && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        AI Verified
+                      </span>
+                    )}
+                  </div>
+                  {biz && (
+                    <div className="text-[11px] text-slate-300 space-y-0.5">
+                      {biz.businessCategory && <p><strong className="text-slate-400">Category:</strong> {biz.businessCategory}</p>}
+                      {biz.servicesOffered && <p><strong className="text-slate-400">Services:</strong> {biz.servicesOffered}</p>}
+                      {biz.uploadedDocName && <p><strong className="text-slate-400">Uploaded File:</strong> <span className="text-purple-300">{biz.uploadedDocName}</span></p>}
+                    </div>
+                  )}
+                  {selectedPage.knowledge_base && (
+                    <p className="text-slate-400 font-mono text-[10px] line-clamp-3 pt-1 border-t border-slate-800/80">
+                      {selectedPage.knowledge_base}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* System Prompt Preview */}
             {selectedPage.system_prompt && (
