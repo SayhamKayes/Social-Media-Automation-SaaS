@@ -24,8 +24,10 @@ export default function SystemSettings({
   const [webhookUrl, setWebhookUrl] = useState('https://social-automation-saas-dfg4.onrender.com/webhook/facebook-messenger-saas');
   const [autoPostWebhookUrl, setAutoPostWebhookUrl] = useState('https://social-automation-saas-dfg4.onrender.com/webhook/social-auto-post');
   const [verifyToken, setVerifyToken] = useState('socialsaas_secret');
-  const [liveClientHostUrl, setLiveClientHostUrl] = useState('');
-  const [liveAdminHostUrl, setLiveAdminHostUrl] = useState('');
+  const [googleOauthClientId, setGoogleOauthClientId] = useState('');
+  const [n8nGoogleSheetsEmail, setN8nGoogleSheetsEmail] = useState('sayhamkayes101@gmail.com');
+  const [liveClientHostUrl, setLiveClientHostUrl] = useState('https://skzbot.vercel.app');
+  const [liveAdminHostUrl, setLiveAdminHostUrl] = useState('https://adminskzbot.vercel.app');
 
   const [copiedKey, setCopiedKey] = useState(null);
   const [savedNotice, setSavedNotice] = useState(false);
@@ -39,6 +41,8 @@ export default function SystemSettings({
       if (settings.webhook_url) setWebhookUrl(settings.webhook_url);
       if (settings.autopost_webhook_url) setAutoPostWebhookUrl(settings.autopost_webhook_url);
       if (settings.verify_token) setVerifyToken(settings.verify_token);
+      if (settings.google_oauth_client_id !== undefined) setGoogleOauthClientId(settings.google_oauth_client_id);
+      if (settings.n8n_google_sheets_email !== undefined) setN8nGoogleSheetsEmail(settings.n8n_google_sheets_email);
       if (settings.live_client_host_url !== undefined) setLiveClientHostUrl(settings.live_client_host_url);
       if (settings.live_admin_host_url !== undefined) setLiveAdminHostUrl(settings.live_admin_host_url);
     }
@@ -61,6 +65,8 @@ export default function SystemSettings({
         webhook_url: webhookUrl.trim(),
         autopost_webhook_url: autoPostWebhookUrl.trim(),
         verify_token: verifyToken.trim(),
+        google_oauth_client_id: googleOauthClientId.trim(),
+        n8n_google_sheets_email: n8nGoogleSheetsEmail.trim(),
         live_client_host_url: liveClientHostUrl.trim().replace(/\/+$/, ''),
         live_admin_host_url: liveAdminHostUrl.trim().replace(/\/+$/, '')
       });
@@ -262,6 +268,57 @@ export default function SystemSettings({
           </div>
         </div>
 
+        {/* Google Drive & Google Sheets OAuth Client ID (for Client SaaS Picker & Creator) */}
+        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+              <Layers className="w-4 h-4 text-emerald-400" />
+              <span>Google Drive &amp; Google Sheets OAuth Client ID (Client Sign-In)</span>
+            </h3>
+            <a
+              href="https://console.cloud.google.com/auth/clients"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-purple-400 hover:text-purple-300 inline-flex items-center space-x-1"
+            >
+              <span>Google Cloud Clients</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                OAuth 2.0 Web Client ID (xxxx.apps.googleusercontent.com)
+              </label>
+              <input
+                type="text"
+                placeholder="1234567890-abcxyz.apps.googleusercontent.com"
+                value={googleOauthClientId}
+                onChange={(e) => setGoogleOauthClientId(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-purple-500 transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-emerald-300 mb-1.5">
+                n8n Google Sheets Gmail (Auto-Share Editor Target)
+              </label>
+              <input
+                type="email"
+                placeholder="sayhamkayes101@gmail.com"
+                value={n8nGoogleSheetsEmail}
+                onChange={(e) => setN8nGoogleSheetsEmail(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-emerald-500/30 text-white text-xs font-mono focus:outline-none focus:border-emerald-500 transition"
+              />
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+            Enables 1-click <strong>Connect Google Drive &amp; Sheets</strong> inside the Client Portal (<code className="text-purple-300">https://skzbot.vercel.app</code>) and automatically shares newly created or selected client Google Sheets as <strong>Editor</strong> with your n8n Gmail above using the Google Drive Permissions API. Add <code className="text-purple-300">https://skzbot.vercel.app</code> under <em>Authorized JavaScript origins</em> in Google Cloud Console.
+          </p>
+        </div>
+
         {/* Live Deployed Portal URLs */}
         <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
           <div className="flex items-center justify-between">
@@ -285,7 +342,7 @@ export default function SystemSettings({
               </label>
               <input
                 type="url"
-                placeholder="https://your-client-portal.vercel.app"
+                placeholder="https://skzbot.vercel.app"
                 value={liveClientHostUrl}
                 onChange={(e) => setLiveClientHostUrl(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-purple-500 transition"
@@ -298,7 +355,7 @@ export default function SystemSettings({
               </label>
               <input
                 type="url"
-                placeholder="https://your-admin-portal.vercel.app"
+                placeholder="https://adminskzbot.vercel.app"
                 value={liveAdminHostUrl}
                 onChange={(e) => setLiveAdminHostUrl(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-purple-500 transition"
