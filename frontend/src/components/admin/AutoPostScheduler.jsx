@@ -17,11 +17,25 @@ import {
   Save,
   Play,
   Link2,
-  X
+  X,
+  RefreshCw,
+  LogOut,
+  ExternalLink
 } from 'lucide-react';
 import { getPagePlatform } from './SocialMediaManager';
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient';
 import { getPlanQuotaConfig, getLocalQuotaUsage, incrementQuotaUsage } from '../../lib/knowledgeLibrary';
+import {
+  getSavedGoogleSession,
+  saveGoogleSession,
+  connectGoogleDriveAndSheets,
+  listUserSpreadsheets,
+  listUserDriveFolders,
+  createAutoPostSpreadsheet,
+  createDriveFolder,
+  uploadImageToDrive,
+  shareDriveFilesBatch
+} from '../../lib/googleWorkspaceApi';
 import ScheduleDateTimePicker from './ScheduleDateTimePicker';
 
 /* Helper to extract Sheet ID or Drive Folder ID from a full URL or raw ID */
@@ -82,6 +96,17 @@ export default function AutoPostScheduler({ pages = [], userProfile = null }) {
   const [toastMsg, setToastMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
+  /* Google OAuth Direct Drive & Sheet Picker States */
+  const userId = userProfile?.id || 'default';
+  const [googleClientId, setGoogleClientId] = useState(
+    () => import.meta.env.VITE_GOOGLE_CLIENT_ID || localStorage.getItem('saas_google_client_id') || ''
+  );
+  const [n8nSheetsEmail, setN8nSheetsEmail] = useState('sayhamkayes101@gmail.com');
+  const [googleSession, setGoogleSession] = useState(() => getSavedGoogleSession(userId));
+  const [driveSheets, setDriveSheets] = useState([]);
+  const [driveFolders, setDriveFolders] = useState([]);
+  const [googleBusy, setGoogleBusy] = useState(false);
+
   /* Load Admin Master Auto-Post Webhook & User's Saved Sheet/Drive Links from Supabase */
   useEffect(() => {
     const loadDynamicConfigs = async () => {
@@ -95,6 +120,13 @@ export default function AutoPostScheduler({ pages = [], userProfile = null }) {
           });
           if (map.autopost_webhook_url) {
             setMasterAutoPostWebhook(map.autopost_webhook_url);
+          }
+          if (map.google_oauth_client_id && map.google_oauth_client_id.trim()) {
+            setGoogleClientId(map.google_oauth_client_id.trim());
+            localStorage.setItem('saas_google_client_id', map.google_oauth_client_id.trim());
+          }
+          if (map.n8n_google_sheets_email && map.n8n_google_sheets_email.trim()) {
+            setN8nSheetsEmail(map.n8n_google_sheets_email.trim());
           }
           const uid = userProfile?.id || 'default';
           if (map[`user_sheet_link_${uid}`]) {
@@ -154,6 +186,106 @@ export default function AutoPostScheduler({ pages = [], userProfile = null }) {
     );
   };
 
+  /* Load Drive Sheets & Folders when signed in */
+  useEffect(() => {
+    if (googleSession?.accessToken) {
+      refreshGoogleWorkspaceLists(googleSession.accessToken, true);
+    }
+  }, [googleSession?.accessToken]);
+
+  const refreshGoogleWorkspaceLists = async (tokenOverride, silent = false) => {
+    const token = tokenOverride || googleSession?.accessToken;
+    if (!token) return;
+    setGoogleBusy(true);
+    try {
+      const [sheetsList, foldersList] = await Promise.all([
+        listUserSpreadsheets(token),
+        listUserDriveFolders(token)
+      ]);
+      setDriveSheets(sheetsList);
+      setDriveFolders(foldersList);
+    } catch (err) {
+      if (!silent) setErrorMsg(err.message || 'Could not load Google Drive items.');
+      if (String(err.message || '').toLowerCase().includes('invalid credentials')) {
+        saveGoogleSession(userId, null);
+        setGoogleSession(null);
+      }
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
+  const handleConnectGoogleDrive = async () => {
+    setErrorMsg('');
+    if (!googleClientId.trim()) {
+      setErrorMsg('Please ask Super Admin to set Google OAuth Client ID in Master APIs & Gateway, or enter it below.');
+      return;
+    }
+    setGoogleBusy(true);
+    try {
+      const sess = await connectGoogleDriveAndSheets(googleClientId.trim(), userId);
+      setGoogleSession(sess);
+      await refreshGoogleWorkspaceLists(sess.accessToken, false);
+      setToastMsg(`Google Drive connected (${sess.email || 'Active'})!`);
+      setTimeout(() => setToastMsg(''), 3500);
+    } catch (err) {
+      setErrorMsg(err.message || 'Google Drive Sign-In cancelled or failed.');
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
+  const handleAutoCreateContentSheet = async () => {
+    if (!googleSession?.accessToken) return;
+    setGoogleBusy(true);
+    setErrorMsg('');
+    try {
+      const created = await createAutoPostSpreadsheet(
+        googleSession.accessToken,
+        'AutoReply AI Social Content Queue',
+        n8nSheetsEmail
+      );
+      setDriveSheets(prev => [created, ...prev]);
+      setGoogleSheetLink(created.webViewLink);
+      localStorage.setItem('saas_user_sheet_link', created.webViewLink);
+      setToastMsg(
+        created.sharedWithN8n
+          ? `Created "${created.name}", auto-shared Editor access with n8n (${n8nSheetsEmail}), and linked!`
+          : `Created "${created.name}" and linked automatically!`
+      );
+    } catch (err) {
+      setErrorMsg(err.message || 'Could not create Google Sheet.');
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
+  const handleAutoCreateDriveFolder = async () => {
+    if (!googleSession?.accessToken) return;
+    setGoogleBusy(true);
+    setErrorMsg('');
+    try {
+      const created = await createDriveFolder(
+        googleSession.accessToken,
+        'AutoReply AI Social Photos',
+        n8nSheetsEmail
+      );
+      setDriveFolders(prev => [created, ...prev]);
+      const link = created.webViewLink || `https://drive.google.com/drive/folders/${created.id}`;
+      setGoogleDriveFolderLink(link);
+      localStorage.setItem('saas_user_drive_link', link);
+      setToastMsg(
+        created.sharedWithN8n
+          ? `Created Drive folder "${created.name}" & auto-shared with n8n (${n8nSheetsEmail})!`
+          : `Created Google Drive folder "${created.name}" and linked automatically!`
+      );
+    } catch (err) {
+      setErrorMsg(err.message || 'Could not create Google Drive folder.');
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
   /* Handle Local Photo Upload from User's PC -> Upload to Google Drive -> Auto-fill Drive Link */
   const handleLocalFileSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -169,13 +301,24 @@ export default function AutoPostScheduler({ pages = [], userProfile = null }) {
       const base64DataUrl = event.target?.result || '';
       setUploadedFilePreview(base64DataUrl);
 
-      const folderId = extractGoogleId(googleDriveFolderLink) || 'root';
+      const folderId = extractGoogleId(googleDriveFolderLink) || '';
       const sheetId = extractGoogleId(googleSheetLink);
 
       try {
-        /* Attempt live upload via Admin's n8n Auto-Post & Drive Webhook */
         let generatedDriveLink = '';
-        if (masterAutoPostWebhook) {
+
+        /* 1. Upload directly via connected Google Drive OAuth session if signed in */
+        if (googleSession?.accessToken) {
+          try {
+            const driveResult = await uploadImageToDrive(googleSession.accessToken, file, folderId);
+            generatedDriveLink = driveResult.directUrl || driveResult.webViewLink;
+          } catch (driveErr) {
+            console.warn('Direct Drive API upload fallback to n8n:', driveErr);
+          }
+        }
+
+        /* 2. Fallback to Admin's n8n Auto-Post & Drive Webhook */
+        if (!generatedDriveLink && masterAutoPostWebhook) {
           try {
             const response = await fetch(masterAutoPostWebhook, {
               method: 'POST',
@@ -186,7 +329,7 @@ export default function AutoPostScheduler({ pages = [], userProfile = null }) {
                 mime_type: file.type,
                 file_base64: base64DataUrl,
                 drive_folder_link: googleDriveFolderLink,
-                drive_folder_id: folderId,
+                drive_folder_id: folderId || 'root',
                 google_sheet_link: googleSheetLink,
                 google_sheet_id: sheetId
               })
@@ -206,12 +349,12 @@ export default function AutoPostScheduler({ pages = [], userProfile = null }) {
           const cleanName = encodeURIComponent(file.name.replace(/\s+/g, '_'));
           generatedDriveLink = googleDriveFolderLink
             ? `${googleDriveFolderLink.replace(/\/+$/, '')}/${cleanName}`
-            : `https://drive.google.com/drive/folders/${folderId}/${cleanName}`;
+            : `https://drive.google.com/drive/folders/${folderId || 'root'}/${cleanName}`;
         }
 
         setMediaUrl(generatedDriveLink);
         setToastMsg(
-          `Photo "${file.name}" uploaded to Google Drive and link automatically pasted for your Spreadsheet!`
+          `Photo "${file.name}" uploaded to Google Drive and link automatically pasted!`
         );
       } catch (err) {
         setErrorMsg('Failed to process local photo: ' + (err.message || 'Error'));
@@ -256,8 +399,22 @@ export default function AutoPostScheduler({ pages = [], userProfile = null }) {
       }
     }
 
-    setToastMsg('Your Google Sheet Link and Google Drive Folder Link have been saved and synced!');
-    setTimeout(() => setToastMsg(''), 4000);
+    let autoShareNote = '';
+    if (googleSession?.accessToken && n8nSheetsEmail) {
+      const shareRes = await shareDriveFilesBatch(
+        googleSession.accessToken,
+        [cleanSheet, cleanDrive],
+        n8nSheetsEmail
+      );
+      if (shareRes.sharedCount > 0) {
+        autoShareNote = ` Auto-shared Editor access with n8n (${n8nSheetsEmail}).`;
+      } else if (shareRes.manualIds.length > 0) {
+        autoShareNote = ` Note: If using a pre-existing sheet/folder, please share it as Editor with ${n8nSheetsEmail}.`;
+      }
+    }
+
+    setToastMsg(`Your Google Sheet Link and Google Drive Folder Link have been saved and synced!${autoShareNote}`);
+    setTimeout(() => setToastMsg(''), 5000);
   };
 
   const dispatchToN8n = async (postPayload) => {
@@ -723,24 +880,111 @@ export default function AutoPostScheduler({ pages = [], userProfile = null }) {
           </div>
         </div>
       ) : (
-        /* TAB 2: SIMPLE USER GOOGLE SHEET LINK & GOOGLE DRIVE FOLDER LINK SETUP */
+        /* TAB 2: GOOGLE DRIVE SIGN-IN, DROPDOWN PICKER & LINK SETUP */
         <form onSubmit={handleSaveSheetAndDrive} className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-5 max-w-2xl">
-          <div>
-            <h3 className="text-base font-bold text-white flex items-center space-x-2">
-              <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
-              <span>Connect Your Google Sheet &amp; Google Drive Folder</span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              Simply paste your <strong>Google Sheet Link</strong> and your <strong>Google Drive Folder Link</strong> below. Whenever you upload a photo from your PC, it will automatically be sent to your Drive folder and its link will be pasted directly into your Spreadsheet!
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center space-x-2">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+                <span>Connect Google Drive &amp; Content Sheet</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                Sign in with your Google Drive to select or auto-create your Google Sheet &amp; Drive Folder, or paste links directly below.
+              </p>
+            </div>
+
+            {googleSession ? (
+              <div className="flex items-center space-x-2 shrink-0">
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                  {googleSession.email || 'Google Connected'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => refreshGoogleWorkspaceLists(googleSession.accessToken)}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                  title="Refresh Drive Items"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${googleBusy ? 'animate-spin' : ''}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    saveGoogleSession(userId, null);
+                    setGoogleSession(null);
+                  }}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-rose-400"
+                  title="Disconnect Google"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleConnectGoogleDrive}
+                disabled={googleBusy}
+                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-md shadow-emerald-600/25 shrink-0"
+              >
+                <FolderGit2 className="w-4 h-4" />
+                <span>{googleBusy ? 'Connecting...' : 'Sign in with Google Drive'}</span>
+              </button>
+            )}
           </div>
+
+          {!googleClientId && (
+            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Google OAuth Client ID (Auto-inherited from Master Admin or enter here)
+              </label>
+              <input
+                type="text"
+                value={googleClientId}
+                onChange={(e) => {
+                  setGoogleClientId(e.target.value);
+                  localStorage.setItem('saas_google_client_id', e.target.value.trim());
+                }}
+                placeholder="1234567890-abcxyz.apps.googleusercontent.com"
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+          )}
 
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5 flex items-center space-x-1.5">
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Google Sheet Link (Where Post Captions &amp; Drive Links Are Saved)</span>
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5">
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Google Sheet (Content Queue)</span>
+                </label>
+                {googleSession && (
+                  <button
+                    type="button"
+                    onClick={handleAutoCreateContentSheet}
+                    disabled={googleBusy}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 text-[11px] font-bold transition"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Create New Sheet</span>
+                  </button>
+                )}
+              </div>
+
+              {googleSession && driveSheets.length > 0 && (
+                <select
+                  value={driveSheets.find(s => googleSheetLink.includes(s.id))?.id || ''}
+                  onChange={(e) => {
+                    const selected = driveSheets.find(s => s.id === e.target.value);
+                    if (selected) setGoogleSheetLink(selected.webViewLink || `https://docs.google.com/spreadsheets/d/${selected.id}/edit`);
+                  }}
+                  className="w-full mb-2 px-3 py-2 rounded-lg bg-slate-950 border border-emerald-500/30 text-emerald-300 text-xs focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="">Select existing Google Sheet from Drive...</option>
+                  {driveSheets.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              )}
+
               <input
                 type="text"
                 required
@@ -752,10 +996,40 @@ export default function AutoPostScheduler({ pages = [], userProfile = null }) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5 flex items-center space-x-1.5">
-                <FolderGit2 className="w-3.5 h-3.5 text-amber-400" />
-                <span>Google Drive Folder Link (Where Uploaded Photos Are Stored)</span>
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5">
+                  <FolderGit2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Google Drive Folder (Uploaded Photos)</span>
+                </label>
+                {googleSession && (
+                  <button
+                    type="button"
+                    onClick={handleAutoCreateDriveFolder}
+                    disabled={googleBusy}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/30 text-[11px] font-bold transition"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Create New Folder</span>
+                  </button>
+                )}
+              </div>
+
+              {googleSession && driveFolders.length > 0 && (
+                <select
+                  value={driveFolders.find(f => googleDriveFolderLink.includes(f.id))?.id || ''}
+                  onChange={(e) => {
+                    const selected = driveFolders.find(f => f.id === e.target.value);
+                    if (selected) setGoogleDriveFolderLink(selected.webViewLink || `https://drive.google.com/drive/folders/${selected.id}`);
+                  }}
+                  className="w-full mb-2 px-3 py-2 rounded-lg bg-slate-950 border border-amber-500/30 text-amber-300 text-xs focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">Select existing Drive Folder...</option>
+                  {driveFolders.map((f) => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+              )}
+
               <input
                 type="text"
                 required
