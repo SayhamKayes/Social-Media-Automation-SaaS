@@ -9,7 +9,7 @@ export default function Footer() {
 
   const [adminPortalUrl, setAdminPortalUrl] = useState(
     import.meta.env.VITE_ADMIN_PORTAL_URL ||
-    (isLocalHost ? 'http://localhost:3001' : 'https://social-media-automation-admin.vercel.app')
+    (isLocalHost ? 'http://localhost:3001' : 'https://adminskzbot.vercel.app')
   );
 
   useEffect(() => {
