@@ -44,7 +44,7 @@ export default function StaffAccessManager({
   /* Live Host URL for Staff Invitation & Password Emails (prevents localhost links) */
   const detectedOrigin = typeof window !== 'undefined' && !window.location.origin.includes('localhost')
     ? window.location.origin
-    : 'https://social-media-automation-admin.vercel.app';
+    : 'https://adminskzbot.vercel.app';
 
   const [liveHostUrl, setLiveHostUrl] = useState(
     settings?.live_admin_host_url || localStorage.getItem('saas_live_admin_host_url') || detectedOrigin
@@ -409,7 +409,7 @@ export default function StaffAccessManager({
             <input
               type="url"
               required
-              placeholder="https://your-admin-panel.vercel.app"
+              placeholder="https://adminskzbot.vercel.app"
               value={liveHostUrl}
               onChange={(e) => setLiveHostUrl(e.target.value)}
               className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-purple-500"
