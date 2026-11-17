@@ -39,7 +39,7 @@ export default function Footer() {
         </div>
 
         <p className="text-xs sm:text-sm text-slate-400">
-          &copy; {new Date().getFullYear()} AutoReply AI. Developed by <a href="https://theskzlab.com/" target='_blank' className="hover:text-slate-300 transition">SKzLAB</a>.
+          &copy; {new Date().getFullYear()} AutoReply AI. Developed by <a href="https://theskzlab.com/" target='_blank' rel='noopener noreferrer' className="hover:text-slate-300 transition">SKzLAB</a>.
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-5 text-xs sm:text-sm">
