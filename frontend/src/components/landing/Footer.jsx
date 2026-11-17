@@ -9,7 +9,7 @@ export default function Footer() {
 
   const [adminPortalUrl, setAdminPortalUrl] = useState(
     import.meta.env.VITE_ADMIN_PORTAL_URL ||
-      (isLocalHost ? 'http://localhost:3001' : 'https://social-media-automation-admin.vercel.app')
+    (isLocalHost ? 'http://localhost:3001' : 'https://social-media-automation-admin.vercel.app')
   );
 
   useEffect(() => {
@@ -39,24 +39,13 @@ export default function Footer() {
         </div>
 
         <p className="text-xs sm:text-sm text-slate-400">
-          &copy; {new Date().getFullYear()} AutoReply AI. Built for scalable social commerce automation.
+          &copy; {new Date().getFullYear()} AutoReply AI. Developed by <a href="https://theskzlab.com/" className="hover:text-slate-300 transition">SKzLAB</a>.
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-5 text-xs sm:text-sm">
           <a href="#features" className="hover:text-slate-300 transition">Features</a>
           <a href="#how-it-works" className="hover:text-slate-300 transition">How it Works</a>
           <a href="#pricing" className="hover:text-slate-300 transition">Pricing</a>
-          <a
-            href={adminPortalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-purple-300 hover:text-purple-200 text-xs font-semibold transition"
-            title={`Open Admin Portal (${adminPortalUrl})`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
-            <span>Admin Portal</span>
-            <ExternalLink className="w-3 h-3 text-slate-500" />
-          </a>
         </div>
       </div>
     </footer>
