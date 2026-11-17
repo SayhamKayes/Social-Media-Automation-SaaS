@@ -94,13 +94,13 @@ async function extractTextFromDocument(file) {
   return rawText.replace(/[^\x09\x0A\x0D\x20-\x7E\u0980-\u09FF]/g, ' ').replace(/\s{2,}/g, ' ').trim();
 }
 
-const DEFAULT_MASTER_PROMPT = `You are an expert, highly polite, and persuasive Senior Sales Consultant. Your primary goal is to guide clients smoothly, recommend suitable packages, answer questions, and secure orders via Messenger chat.
+const DEFAULT_MASTER_PROMPT = `You are an official Senior Sales Consultant and Customer Support Representative for {{business_name}}. Your primary goal is to represent {{business_name}} authentically, understand the customer's requirements, recommend suitable packages from the Products Google Sheet, answer FAQs from the FAQ Google Sheet and Knowledge Base, and secure confirmed orders.
 
 # Communication Tone & Style
-- Polite, welcoming, helpful, and professional (match the user's language: Bengali / Banglish / English).
-- Sound like a human sales expert, not a rigid robot.
+- Polite, welcoming, helpful, and human (match the customer's language: Bengali / Banglish / English).
+- NEVER say you are Gemini, Google AI, OpenAI, ChatGPT, or an AI model. Always introduce yourself as an official representative of {{business_name}}.
 - Keep messages clean, concise, and easy to read on mobile.
-- Strictly summarize customer Name, Phone, and Package for confirmation before finalizing orders.`;
+- Strictly confirm Customer Name, Phone Number, and Selected Package before recording an order in Orders Sheet.`;
 
 const DEFAULT_MASTER_KNOWLEDGE = `# Business Policies & FAQ
 - Working Hours: 10:00 AM - 10:00 PM (Everyday)
@@ -116,6 +116,7 @@ export default function AdminAIAgentsManager({
   onSyncPagesPrompt
 }) {
   const [targetScope, setTargetScope] = useState('ALL_MASTER');
+  const [preserveClientKnowledge, setPreserveClientKnowledge] = useState(true);
   const [systemPrompt, setSystemPrompt] = useState(
     settings?.master_ai_system_prompt || DEFAULT_MASTER_PROMPT
   );
@@ -206,18 +207,22 @@ export default function AdminAIAgentsManager({
           });
         }
 
-        /* 2. Sync to ALL connected business pages in business_pages table */
+        /* 2. Sync to ALL connected business pages in business_pages table (preserving client uploaded knowledge unless unchecked) */
         if (onSyncPagesPrompt) {
-          await onSyncPagesPrompt('ALL', systemPrompt, knowledgeBase);
+          await onSyncPagesPrompt('ALL', systemPrompt, knowledgeBase, {
+            syncKnowledge: !preserveClientKnowledge
+          });
         }
 
         setSuccessMsg(
-          `Master AI Prompt & Knowledge Base saved and synced across all ${pages.length} connected business page(s)!`
+          preserveClientKnowledge
+            ? `Master AI Prompt Template synced across all ${pages.length} page(s) while preserving each client's uploaded Business Profile & Knowledge!`
+            : `Master AI Prompt & Knowledge Base saved and overwritten across all ${pages.length} connected page(s)!`
         );
       } else {
         /* Update only selected business page */
         if (onSyncPagesPrompt) {
-          await onSyncPagesPrompt(targetScope, systemPrompt, knowledgeBase);
+          await onSyncPagesPrompt(targetScope, systemPrompt, knowledgeBase, { syncKnowledge: true });
         }
         const pg = pages.find(p => p.page_id === targetScope);
         setSuccessMsg(
@@ -239,7 +244,7 @@ export default function AdminAIAgentsManager({
       const masterPrompt = settings?.master_ai_system_prompt || systemPrompt;
       const masterKb = settings?.master_ai_knowledge_base || knowledgeBase;
       if (onSyncPagesPrompt) {
-        await onSyncPagesPrompt(page.page_id, masterPrompt, masterKb);
+        await onSyncPagesPrompt(page.page_id, masterPrompt, masterKb, { syncKnowledge: !page.knowledge_base });
       }
       setSuccessMsg(`"${page.page_name}" synced with Master AI Prompt & Knowledge Base!`);
       setTimeout(() => setSuccessMsg(''), 3500);
@@ -379,6 +384,35 @@ export default function AdminAIAgentsManager({
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="text-slate-400 font-semibold mr-1">Dynamic Auto-Variables:</span>
+              {['{{business_name}}', '{{business_category}}', '{{services_offered}}'].map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setSystemPrompt((prev) => `${prev}${prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' '}${tag}`)}
+                  className="px-2 py-0.5 rounded-md bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 font-mono transition"
+                  title="Click to insert into Master Prompt"
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+
+            {targetScope === 'ALL_MASTER' && (
+              <label className="inline-flex items-center space-x-2 text-xs text-emerald-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={preserveClientKnowledge}
+                  onChange={(e) => setPreserveClientKnowledge(e.target.checked)}
+                  className="rounded border-slate-700 bg-slate-950 text-purple-600 focus:ring-purple-500"
+                />
+                <span>Preserve client uploaded Business Knowledge &amp; Docs</span>
+              </label>
+            )}
+          </div>
+
           <textarea
             rows={8}
             value={systemPrompt}
@@ -469,28 +503,53 @@ export default function AdminAIAgentsManager({
           <div className="divide-y divide-slate-800">
             {pages.map((page) => {
               const masterPrompt = settings?.master_ai_system_prompt || DEFAULT_MASTER_PROMPT;
-              const masterKb = settings?.master_ai_knowledge_base || DEFAULT_MASTER_KNOWLEDGE;
-              const isSyncedWithMaster =
-                page.system_prompt === masterPrompt && page.knowledge_base === masterKb;
+              const isPromptSynced = page.system_prompt === masterPrompt;
+              let clientBizProfile = null;
+              try {
+                const rawBiz = settings?.[`business_profile_${page.page_id}`];
+                if (rawBiz) clientBizProfile = JSON.parse(rawBiz);
+              } catch {
+                clientBizProfile = null;
+              }
+              const hasClientKnowledge = Boolean(clientBizProfile || (page.knowledge_base && page.knowledge_base.trim()));
+              const hasSheets = Boolean(page.products_sheet_id || page.faq_sheet_id || page.orders_sheet_id);
 
               return (
                 <div key={page.page_id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-800/30 transition">
                   <div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-bold text-white">{page.page_name}</span>
                       <span className="text-[10px] font-mono text-slate-500">ID: {page.page_id}</span>
-                      {isSyncedWithMaster ? (
+                      {isPromptSynced ? (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                          Synced with Master
+                          Master Prompt Synced
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                          Custom / Out of Sync
+                          Custom Prompt
+                        </span>
+                      )}
+                      {clientBizProfile?.aiVerified && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                          AI Verified Brand
+                        </span>
+                      )}
+                      {hasClientKnowledge && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                          {clientBizProfile?.uploadedDocName ? `Doc: ${clientBizProfile.uploadedDocName}` : 'Business Info Ready'}
+                        </span>
+                      )}
+                      {hasSheets && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          Sheets Linked
                         </span>
                       )}
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5">
                       Owner: <span className="text-slate-300">{getOwnerEmail(page.user_id)}</span>
+                      {clientBizProfile?.businessCategory && (
+                        <span className="ml-2 text-purple-300">• {clientBizProfile.businessCategory}</span>
+                      )}
                     </p>
                   </div>
 
