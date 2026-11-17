@@ -59,8 +59,15 @@ export default function UserProfile({
     fetchSupabaseQuotaUsage(tenantId).then((fresh) => {
       if (isMounted && fresh) setUsageState(fresh);
     });
+    const handleQuotaEvent = (e) => {
+      if (isMounted && (!e.detail?.userId || e.detail.userId === tenantId)) {
+        setUsageState(e.detail?.usage || getLocalQuotaUsage(tenantId));
+      }
+    };
+    window.addEventListener('saas-quota-updated', handleQuotaEvent);
     return () => {
       isMounted = false;
+      window.removeEventListener('saas-quota-updated', handleQuotaEvent);
     };
   }, [tenantId]);
 
