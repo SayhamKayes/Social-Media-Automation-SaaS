@@ -143,6 +143,9 @@ export default function App() {
     if (tabId === 'payment_ledger') {
       setLedgerVisited(true);
     }
+    if (tabId === 'users' || tabId === 'overview' || tabId === 'pages' || tabId === 'ai_agents') {
+      fetchData();
+    }
   };
   
   const [users, setUsers] = useState(INITIAL_MOCK_USERS);
@@ -157,8 +160,10 @@ export default function App() {
     webhook_url: 'https://social-automation-saas-dfg4.onrender.com/webhook/facebook-messenger-saas',
     autopost_webhook_url: 'https://social-automation-saas-dfg4.onrender.com/webhook/social-auto-post',
     verify_token: 'socialsaas_secret',
-    live_client_host_url: import.meta.env.VITE_CLIENT_PORTAL_URL || '',
-    live_admin_host_url: import.meta.env.VITE_ADMIN_PORTAL_URL || '',
+    google_oauth_client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+    n8n_google_sheets_email: import.meta.env.VITE_N8N_SHEETS_EMAIL || 'sayhamkayes101@gmail.com',
+    live_client_host_url: import.meta.env.VITE_CLIENT_PORTAL_URL || 'https://skzbot.vercel.app',
+    live_admin_host_url: import.meta.env.VITE_ADMIN_PORTAL_URL || 'https://adminskzbot.vercel.app',
     admin_2fa_enabled: 'false',
     smtp_host: 'smtp.gmail.com',
     smtp_port: '587',
@@ -406,7 +411,7 @@ export default function App() {
     const clientRedirect =
       settings?.live_client_host_url ||
       import.meta.env.VITE_CLIENT_PORTAL_URL ||
-      'http://localhost:3000';
+      'https://skzbot.vercel.app';
     if (isSupabaseConfigured()) {
       try {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -668,15 +673,22 @@ export default function App() {
     }
   };
 
-  /* Action: Sync AI System Prompt & Knowledge Base across connected business_pages */
-  const handleSyncPagesPrompt = async (targetPageId, systemPrompt, knowledgeBase) => {
+  /* Action: Sync AI System Prompt (and optionally Knowledge Base) across connected business_pages */
+  const handleSyncPagesPrompt = async (targetPageId, systemPrompt, knowledgeBase, options = {}) => {
+    const syncKnowledge = typeof options === 'object' ? Boolean(options.syncKnowledge) : false;
     const nowIso = new Date().toISOString();
+
     setPages(prev =>
-      prev.map(p =>
-        targetPageId === 'ALL' || p.page_id === targetPageId
-          ? { ...p, system_prompt: systemPrompt, knowledge_base: knowledgeBase, updated_at: nowIso }
-          : p
-      )
+      prev.map(p => {
+        if (targetPageId !== 'ALL' && p.page_id !== targetPageId) return p;
+        const shouldUpdateKb = targetPageId !== 'ALL' || syncKnowledge || !p.knowledge_base;
+        return {
+          ...p,
+          system_prompt: systemPrompt,
+          knowledge_base: shouldUpdateKb ? knowledgeBase : p.knowledge_base,
+          updated_at: nowIso
+        };
+      })
     );
 
     if (isSupabaseConfigured()) {
@@ -684,15 +696,36 @@ export default function App() {
         if (targetPageId === 'ALL') {
           const pageIds = pages.map(p => p.page_id).filter(Boolean);
           if (pageIds.length > 0) {
-            const { error } = await supabase
-              .from('business_pages')
-              .update({
-                system_prompt: systemPrompt,
-                knowledge_base: knowledgeBase,
-                updated_at: nowIso
-              })
-              .in('page_id', pageIds);
-            if (error) throw error;
+            if (syncKnowledge) {
+              const { error } = await supabase
+                .from('business_pages')
+                .update({
+                  system_prompt: systemPrompt,
+                  knowledge_base: knowledgeBase,
+                  updated_at: nowIso
+                })
+                .in('page_id', pageIds);
+              if (error) throw error;
+            } else {
+              /* Update Master System Prompt on all pages without erasing client-uploaded Knowledge Base */
+              const { error } = await supabase
+                .from('business_pages')
+                .update({
+                  system_prompt: systemPrompt,
+                  updated_at: nowIso
+                })
+                .in('page_id', pageIds);
+              if (error) throw error;
+
+              /* Backfill Master Knowledge Base ONLY for pages with empty knowledge_base */
+              const emptyKbIds = pages.filter(p => !p.knowledge_base || !p.knowledge_base.trim()).map(p => p.page_id);
+              if (emptyKbIds.length > 0 && knowledgeBase) {
+                await supabase
+                  .from('business_pages')
+                  .update({ knowledge_base: knowledgeBase, updated_at: nowIso })
+                  .in('page_id', emptyKbIds);
+              }
+            }
           }
         } else {
           const { error } = await supabase
@@ -707,7 +740,9 @@ export default function App() {
         }
         showToast(
           targetPageId === 'ALL'
-            ? 'Master AI Prompt & Knowledge synced across all connected pages!'
+            ? (syncKnowledge
+                ? 'Master AI Prompt & Knowledge synced across all connected pages!'
+                : 'Master AI Prompt Template synced across all pages (client knowledge files preserved)!')
             : 'Selected business page AI Prompt & Knowledge updated!'
         );
       } catch (err) {
@@ -813,6 +848,7 @@ export default function App() {
                 pages={pages}
                 orders={orders}
                 transactions={transactions}
+                settings={settings}
                 onNavigateTab={handleSelectTab}
               />
             )}
@@ -855,6 +891,7 @@ export default function App() {
               <PagesOversight
                 pages={pages}
                 users={users}
+                settings={settings}
                 onTogglePageStatus={handleTogglePageStatus}
                 onUpdatePageBotStatus={handleUpdatePageBotStatus}
                 onDeletePage={handleDeletePage}
