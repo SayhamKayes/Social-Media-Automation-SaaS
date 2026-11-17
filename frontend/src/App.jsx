@@ -21,6 +21,7 @@ import UserProfile from './components/admin/UserProfile';
 import SubscriptionCheckoutModal from './components/checkout/SubscriptionCheckoutModal';
 
 import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
+import { fetchSupabaseQuotaUsage } from './lib/knowledgeLibrary';
 
 export default function App() {
   /* Check initial path on page load (/dashboard or /admin) */
@@ -127,6 +128,7 @@ export default function App() {
         setUserProfile(profileData);
       } else {
         setUserProfile({
+          id: userId,
           plan_tier: 'free',
           max_pages: 1,
           role: 'user',
@@ -202,6 +204,13 @@ export default function App() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles', filter: `id=eq.${user.id}` }, () => {
         loadUserData(user.id);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'platform_settings' }, (payload) => {
+        if (payload?.new?.setting_key === `quota_usage_${user.id}`) {
+          fetchSupabaseQuotaUsage(user.id).then((fresh) => {
+            window.dispatchEvent(new CustomEvent('saas-quota-updated', { detail: { userId: user.id, usage: fresh } }));
+          });
+        }
       })
       .subscribe();
 
@@ -567,6 +576,7 @@ export default function App() {
                 )}
                 {activeAdminTab === 'simulator' && (
                   <TestChatSimulator
+                    pages={pages}
                     selectedPage={pages[0]}
                     userProfile={userProfile}
                     onUpgradePlan={() => setActiveAdminTab('profile')}
