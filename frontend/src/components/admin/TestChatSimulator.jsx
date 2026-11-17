@@ -1,25 +1,77 @@
 import React, { useState, useEffect } from 'react';
-import { Send, Bot, User, RefreshCw, Sparkles, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
-import { 
-  getLocalQuotaUsage, 
-  fetchSupabaseQuotaUsage, 
-  getEffectiveUserQuota, 
-  incrementQuotaUsage 
+import { Send, Bot, User, RefreshCw, Sparkles, AlertCircle } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient';
+import {
+  getLocalQuotaUsage,
+  fetchSupabaseQuotaUsage,
+  getEffectiveUserQuota,
+  incrementQuotaUsage,
+  resolveDynamicSystemPrompt
 } from '../../lib/knowledgeLibrary';
 
-export default function TestChatSimulator({ selectedPage, userProfile = null, onUpgradePlan }) {
+export default function TestChatSimulator({ pages = [], selectedPage = null, userProfile = null, onUpgradePlan }) {
   const userId = userProfile?.id || 'default';
+  const availablePages = pages.length > 0 ? pages : selectedPage ? [selectedPage] : [];
+  const [activePageId, setActivePageId] = useState(availablePages[0]?.page_id || '');
+  const activePage = availablePages.find(p => p.page_id === activePageId) || availablePages[0] || null;
+
   const [usage, setUsage] = useState(() => getLocalQuotaUsage(userId));
+  const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('saas_gemini_api_key') || '');
+  const [masterSystemPrompt, setMasterSystemPrompt] = useState('');
+  const [businessProfile, setBusinessProfile] = useState(null);
+
+  useEffect(() => {
+    if (!activePageId && availablePages.length > 0) {
+      setActivePageId(availablePages[0].page_id);
+    }
+  }, [availablePages.length]);
 
   useEffect(() => {
     let isMounted = true;
     fetchSupabaseQuotaUsage(userId).then((fresh) => {
       if (isMounted && fresh) setUsage(fresh);
     });
+    const handleQuotaEvent = (e) => {
+      if (isMounted && (!e.detail?.userId || e.detail.userId === userId)) {
+        setUsage(e.detail?.usage || getLocalQuotaUsage(userId));
+      }
+    };
+    window.addEventListener('saas-quota-updated', handleQuotaEvent);
     return () => {
       isMounted = false;
+      window.removeEventListener('saas-quota-updated', handleQuotaEvent);
     };
   }, [userId]);
+
+  /* Fetch live Gemini Key, Master Prompt, and Page Business Profile from Supabase */
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    const keys = ['gemini_api_key', 'master_ai_system_prompt'];
+    if (activePage?.page_id) keys.push(`business_profile_${activePage.page_id}`);
+
+    supabase
+      .from('platform_settings')
+      .select('setting_key, setting_value')
+      .in('setting_key', keys)
+      .then(({ data }) => {
+        if (!data) return;
+        data.forEach((row) => {
+          if (row.setting_key === 'gemini_api_key' && row.setting_value?.trim() && !localStorage.getItem('saas_gemini_api_key')) {
+            setGeminiApiKey(row.setting_value.trim());
+          }
+          if (row.setting_key === 'master_ai_system_prompt' && row.setting_value) {
+            setMasterSystemPrompt(row.setting_value);
+          }
+          if (activePage?.page_id && row.setting_key === `business_profile_${activePage.page_id}` && row.setting_value) {
+            try {
+              setBusinessProfile(JSON.parse(row.setting_value));
+            } catch {
+              setBusinessProfile(null);
+            }
+          }
+        });
+      });
+  }, [activePage?.page_id]);
 
   const effectiveQuota = getEffectiveUserQuota(userProfile, usage);
   const resetDateFormatted = effectiveQuota.nextResetDate.toLocaleDateString('en-US', {
@@ -29,25 +81,38 @@ export default function TestChatSimulator({ selectedPage, userProfile = null, on
   });
   const isQuotaExhausted = effectiveQuota.isMessageExhausted || effectiveQuota.isTokenExhausted;
 
-  const expiresAt = userProfile?.subscription_expires_at 
-    ? new Date(userProfile.subscription_expires_at) 
-    : userProfile?.created_at 
+  const expiresAt = userProfile?.subscription_expires_at
+    ? new Date(userProfile.subscription_expires_at)
+    : userProfile?.created_at
       ? new Date(new Date(userProfile.created_at).getTime() + 30 * 24 * 60 * 60 * 1000)
       : null;
   const isSubscriptionExpired = expiresAt ? (new Date() > expiresAt) : false;
   const isFreeTrial = (userProfile?.plan_tier || 'free').toLowerCase() === 'free';
   const isFreeTrialExpired = isFreeTrial && isSubscriptionExpired;
 
+  const brandName = businessProfile?.brandName || activePage?.page_name || 'AutoReply Sales Desk';
+
   const [messages, setMessages] = useState([
     {
       sender: 'bot',
-      text: isFreeTrialExpired 
-        ? "Notice: Your 1-Month Free Trial has expired. Automated AI responses are halted. Please upgrade to a paid package to test and deploy."
-        : "Hello! Welcome to our sales desk. How can I help you today with our packages and services?"
+      text: isFreeTrialExpired
+        ? 'Notice: Your 1-Month Free Trial has expired. Automated AI responses are halted. Please upgrade to a paid package to test and deploy.'
+        : `Hello! Welcome to ${brandName}. How can I assist you today?`
     }
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+
+  const handleReset = (nextBrand = brandName) => {
+    setMessages([
+      {
+        sender: 'bot',
+        text: isFreeTrialExpired
+          ? 'Notice: Your 1-Month Free Trial has expired. Automated AI responses are halted. Please upgrade to a paid package to test and deploy.'
+          : `Hello! Welcome to ${nextBrand}. How can I assist you today?`
+      }
+    ]);
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -55,9 +120,9 @@ export default function TestChatSimulator({ selectedPage, userProfile = null, on
 
     if (isFreeTrialExpired) {
       setMessages((prev) => [
-        ...prev, 
+        ...prev,
         { sender: 'user', text: inputText.trim() },
-        { sender: 'bot', text: "Service Halted: Your 1-Month Free Trial has ended. Please upgrade and pay for a package to reactivate AI sales responses." }
+        { sender: 'bot', text: 'Service Halted: Your 1-Month Free Trial has ended. Please upgrade and pay for a package to reactivate AI sales responses.' }
       ]);
       setInputText('');
       return;
@@ -67,68 +132,132 @@ export default function TestChatSimulator({ selectedPage, userProfile = null, on
       setMessages((prev) => [
         ...prev,
         { sender: 'user', text: inputText.trim() },
-        { sender: 'bot', text: `Token / Message Limit Reached: Your monthly quota (${effectiveQuota.tokenLimit.toLocaleString()} Tokens) has been fully used. Your quota will automatically reset on ${resetDateFormatted}, or you can add payment / upgrade your plan to top up extra tokens immediately.` }
+        { sender: 'bot', text: `Token / Message Limit Reached: Your monthly quota (${effectiveQuota.tokenLimit.toLocaleString()} Tokens) has been fully used. Your quota will automatically reset on ${resetDateFormatted}, or you can upgrade your plan to top up extra tokens immediately.` }
       ]);
       setInputText('');
       return;
     }
 
     const userMsg = inputText.trim();
-    setMessages((prev) => [...prev, { sender: 'user', text: userMsg }]);
+    const conversationBeforeSend = [...messages, { sender: 'user', text: userMsg }];
+    setMessages(conversationBeforeSend);
     setInputText('');
     setIsTyping(true);
 
+    const effectiveKey = (localStorage.getItem('saas_gemini_api_key') || geminiApiKey || '').trim();
+    const compiledSystemInstruction = resolveDynamicSystemPrompt(
+      activePage?.system_prompt || masterSystemPrompt,
+      activePage || { page_name: brandName },
+      businessProfile
+    );
+
+    if (effectiveKey) {
+      try {
+        const contents = conversationBeforeSend
+          .slice(-10)
+          .map((m) => ({
+            role: m.sender === 'user' ? 'user' : 'model',
+            parts: [{ text: m.text }]
+          }));
+
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(effectiveKey)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: compiledSystemInstruction }] },
+              contents,
+              generationConfig: { temperature: 0.4, maxOutputTokens: 700 }
+            })
+          }
+        );
+
+        if (res.ok) {
+          const data = await res.json();
+          const botReply =
+            data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+            `Thank you for reaching out to ${brandName}! How can I help you today?`;
+          const usedTokens =
+            Number(data?.usageMetadata?.totalTokenCount) ||
+            Math.max(250, Math.round((compiledSystemInstruction.length + userMsg.length + botReply.length) / 3));
+
+          const updatedUsage = await incrementQuotaUsage(userId, {
+            messages: 1,
+            tokens: usedTokens,
+            posts: 0
+          });
+          setUsage(updatedUsage);
+          setMessages((prev) => [...prev, { sender: 'bot', text: botReply.trim() }]);
+          setIsTyping(false);
+          return;
+        }
+      } catch {
+        /* fallback cleanly below */
+      }
+    }
+
+    /* Offline / No-Key Fallback using Brand Identity & Knowledge Base */
     const estimatedTokens = Math.max(180, userMsg.length * 6 + 240);
-    const updatedUsage = await incrementQuotaUsage(userProfile?.id || 'default', {
+    const updatedUsage = await incrementQuotaUsage(userId, {
       messages: 1,
       tokens: estimatedTokens,
       posts: 0
     });
     setUsage(updatedUsage);
 
-    // Simulate AI Sales Consultant response matching the n8n prompt logic
     setTimeout(() => {
-      let botReply = "Thank you for asking! We have comprehensive packages tailored to your needs. Could you tell me a bit more about your project requirements so I can recommend the exact package?";
-
       const lower = userMsg.toLowerCase();
-      if (lower.includes('price') || lower.includes('package') || lower.includes('cost')) {
-        botReply = "Our Web Development package starts from ৳15,000, and AI Integration starts from ৳25,000. Both include dedicated support and fast turnaround. Would you like to proceed with one of these?";
-      } else if (lower.includes('yes') || lower.includes('order') || lower.includes('confirm') || lower.includes('proceed') || lower.includes('ঠিক আছে')) {
-        botReply = "Awesome! To confirm your order, could you please provide your:\n1. Full Name\n2. Phone Number\n3. Email Address\n\nOnce received, I will present a final summary for your verification.";
-      } else if (lower.includes('017') || lower.includes('018') || lower.includes('019') || lower.includes('@')) {
-        botReply = "Thank you! Here is your order summary for verification:\n\n• Name: Customer\n• Selected: AI Integration Suite\n• Total: ৳25,000\n• Status: Ready for confirmation\n\nPlease reply with 'Confirm' to finalize your order!";
+      let botReply = `Thank you for contacting ${brandName}!`;
+      if (lower.includes('who') || lower.includes('কে') || lower.includes('ke')) {
+        botReply = `আমি ${brandName} এর একজন অফিসিয়াল সেলস ও কাস্টমার সাপোর্ট প্রতিনিধি। ${businessProfile?.tagline || ''} আপনাকে কীভাবে সাহায্য করতে পারি?`;
+      } else if (businessProfile?.servicesOffered) {
+        botReply = `${brandName} এ আমরা ${businessProfile.servicesOffered} সার্ভিসগুলো প্রদান করছি। আপনি কোন প্যাকেজ বা সার্ভিস সম্পর্কে জানতে চাচ্ছেন?`;
+      } else {
+        botReply = `Thank you for asking ${brandName}! Could you tell me a bit more about your requirements so I can recommend the right package?`;
       }
 
       setMessages((prev) => [...prev, { sender: 'bot', text: botReply }]);
       setIsTyping(false);
-    }, 900);
-  };
-
-  const handleReset = () => {
-    setMessages([
-      {
-        sender: 'bot',
-        text: "Hello! Welcome to our sales desk. How can I help you today with our packages and services?"
-      }
-    ]);
+    }, 650);
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight">Interactive Chat Simulator</h2>
           <p className="text-sm text-slate-400 mt-1">
-            Test how your AI Consultant interacts with customers before going live on Facebook.
+            Test your live AI brand identity, uploaded business knowledge, and response behavior before customers message you.
           </p>
         </div>
-        <button
-          onClick={handleReset}
-          className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Reset Chat</span>
-        </button>
+
+        <div className="flex items-center space-x-2">
+          {availablePages.length > 0 && (
+            <select
+              value={activePage?.page_id || ''}
+              onChange={(e) => {
+                setActivePageId(e.target.value);
+                const chosen = availablePages.find(p => p.page_id === e.target.value);
+                handleReset(chosen?.page_name || 'AutoReply Sales Desk');
+              }}
+              className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white font-semibold focus:outline-none focus:border-indigo-500"
+            >
+              {availablePages.map((p) => (
+                <option key={p.page_id} value={p.page_id}>
+                  {p.page_name}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={() => handleReset(brandName)}
+            className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Reset Chat</span>
+          </button>
+        </div>
       </div>
 
       {/* Free Trial Expired Banner */}
@@ -157,16 +286,29 @@ export default function TestChatSimulator({ selectedPage, userProfile = null, on
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl flex flex-col h-[520px]">
+      <div className="max-w-2xl mx-auto rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl flex flex-col h-[540px]">
         {/* Messenger Header */}
-        <div className="px-5 py-3.5 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
+        <div className="px-5 py-3.5 border-b border-slate-800 bg-slate-950 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
               <Bot className="w-4 h-4 text-white" />
             </div>
             <div>
-              <p className="text-xs font-bold text-white">{selectedPage?.page_name || 'AI Sales Assistant'}</p>
-              <p className="text-[10px] text-emerald-400 font-medium">● Typically replies instantly</p>
+              <div className="flex items-center space-x-2">
+                <p className="text-xs font-bold text-white">{brandName}</p>
+                {geminiApiKey ? (
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[9px] font-bold">
+                    Live Gemini 2.5 Flash
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[9px] font-bold">
+                    Preview Mode
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-emerald-400 font-medium">
+                {activePage?.knowledge_base ? '● Business Knowledge Loaded' : '● Typically replies instantly'}
+              </p>
             </div>
           </div>
           <div className="flex items-center space-x-2 text-[11px] font-mono">
@@ -178,7 +320,7 @@ export default function TestChatSimulator({ selectedPage, userProfile = null, on
                 ? 'bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold'
                 : 'bg-purple-500/10 text-purple-300 border-purple-500/20'
             }`}>
-              Tokens Left: {effectiveQuota.tokensRemaining.toLocaleString()} / {effectiveQuota.tokenLimit.toLocaleString()} (Resets {resetDateFormatted})
+              Tokens Left: {effectiveQuota.tokensRemaining.toLocaleString()} (Used: {effectiveQuota.tokensUsed.toLocaleString()})
             </span>
           </div>
         </div>
@@ -212,7 +354,8 @@ export default function TestChatSimulator({ selectedPage, userProfile = null, on
 
           {isTyping && (
             <div className="flex items-center space-x-2 text-slate-500 text-xs italic pl-9">
-              <span className="animate-pulse">AI Consultant is typing...</span>
+              <Sparkles className="w-3.5 h-3.5 animate-spin text-purple-400" />
+              <span className="animate-pulse">{brandName} representative is typing...</span>
             </div>
           )}
         </div>
@@ -223,7 +366,7 @@ export default function TestChatSimulator({ selectedPage, userProfile = null, on
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Type a message (e.g. 'What are your prices?')..."
+            placeholder={`Ask ${brandName} (e.g. 'তুমি কে?', 'তোমাদের প্যাকেজ কী কী?')...`}
             className="flex-1 px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
           />
           <button
@@ -238,4 +381,3 @@ export default function TestChatSimulator({ selectedPage, userProfile = null, on
     </div>
   );
 }
-
