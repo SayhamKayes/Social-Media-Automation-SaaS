@@ -28,8 +28,15 @@ export default function DashboardOverview({ pages = [], orders = [], userProfile
     fetchSupabaseQuotaUsage(userId).then((fresh) => {
       if (isMounted && fresh) setUsageState(fresh);
     });
+    const handleQuotaEvent = (e) => {
+      if (isMounted && (!e.detail?.userId || e.detail.userId === userId)) {
+        setUsageState(e.detail?.usage || getLocalQuotaUsage(userId));
+      }
+    };
+    window.addEventListener('saas-quota-updated', handleQuotaEvent);
     return () => {
       isMounted = false;
+      window.removeEventListener('saas-quota-updated', handleQuotaEvent);
     };
   }, [userId]);
 
