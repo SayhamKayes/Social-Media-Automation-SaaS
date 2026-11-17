@@ -17,7 +17,7 @@ export default function Sidebar({ activeTab, setActiveTab, ordersCount = 0 }) {
     { id: 'social-media', label: 'Social Media', icon: Share2 },
     { id: 'auto-post', label: 'Auto Post & Scheduler', icon: CalendarClock },
     { id: 'api-integrations', label: 'Social Media APIs', icon: KeyRound },
-    { id: 'ai-config', label: 'Google Sheets Config', icon: FileSpreadsheet },
+    { id: 'ai-config', label: 'Business & Sheets AI', icon: FileSpreadsheet },
     { id: 'orders', label: 'Orders & Leads', icon: ShoppingBag, badge: ordersCount > 0 ? ordersCount : null },
     { id: 'simulator', label: 'Chat Simulator', icon: MessageSquareCode },
     { id: 'profile', label: 'Profile & Subscription', icon: UserCheck },
