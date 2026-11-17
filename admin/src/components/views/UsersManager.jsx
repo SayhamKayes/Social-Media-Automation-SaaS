@@ -322,7 +322,7 @@ export default function UsersManager({
                 <th className="py-3.5 px-4">User Email / Account</th>
                 <th className="py-3.5 px-4">Role</th>
                 <th className="py-3.5 px-4">Plan &amp; Package</th>
-                <th className="py-3.5 px-4">AI Tokens &amp; Reset</th>
+                <th className="py-3.5 px-4">Tokens, Msg Credits &amp; Posts</th>
                 <th className="py-3.5 px-4">Status</th>
                 <th className="py-3.5 px-4">Registered</th>
                 <th className="py-3.5 px-4 text-right">Admin Actions</th>
@@ -407,23 +407,39 @@ export default function UsersManager({
                       </td>
 
                       <td className="py-3.5 px-4 font-mono">
-                        <div className="flex items-center space-x-1.5">
-                          <span className={`font-bold text-xs ${
-                            quotaStats.isTokenExhausted ? 'text-rose-400' : 'text-purple-300'
-                          }`}>
-                            {quotaStats.tokensRemaining.toLocaleString()} / {quotaStats.tokenLimit.toLocaleString()}
-                          </span>
-                          <span className="text-[10px] text-slate-400">left</span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] text-slate-400">
-                            Resets: {resetFormatted}
-                          </span>
-                          {quotaStats.isTokenExhausted && (
-                            <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[9px] font-bold uppercase animate-pulse">
-                              Token Limit Exhausted
+                        <div className="space-y-1.5 min-w-[205px]">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-slate-400">
+                              Used: <strong className="text-amber-300">{quotaStats.tokensUsed.toLocaleString()}</strong>
                             </span>
-                          )}
+                            <span className={`font-bold ${
+                              quotaStats.isTokenExhausted ? 'text-rose-400' : 'text-purple-300'
+                            }`}>
+                              {quotaStats.tokensRemaining.toLocaleString()} / {quotaStats.tokenLimit.toLocaleString()} left
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                quotaStats.isTokenExhausted ? 'bg-rose-500' : 'bg-purple-500'
+                              }`}
+                              style={{ width: `${Math.min(100, Math.max(3, Math.round((quotaStats.tokensUsed / quotaStats.tokenLimit) * 100)))}%` }}
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-slate-400">
+                            <span>Msg: <strong className="text-emerald-400">{quotaStats.messagesUsed.toLocaleString()}</strong>/{quotaStats.messageLimit.toLocaleString()}</span>
+                            <span>Posts: <strong className="text-sky-300">{quotaStats.postsUsed.toLocaleString()}</strong>/{quotaStats.postLimit >= 9999 ? '∞' : quotaStats.postLimit}</span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] text-slate-500">
+                              Resets: {resetFormatted}
+                            </span>
+                            {quotaStats.isTokenExhausted && (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[9px] font-bold uppercase animate-pulse">
+                                Token Limit Exhausted
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
 
@@ -729,6 +745,22 @@ export default function UsersManager({
                         viewingQuota.isTokenExhausted ? 'text-rose-400' : 'text-emerald-400'
                       }`}>
                         {viewingQuota.tokensRemaining.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Message Credits & Auto-Posts Usage Counters */}
+                  <div className="grid grid-cols-2 gap-2.5 text-xs">
+                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between">
+                      <span className="text-[10px] uppercase text-slate-400 font-bold">Message Credits</span>
+                      <span className="font-mono font-bold text-emerald-400">
+                        {viewingQuota.messagesUsed.toLocaleString()} / {viewingQuota.messageLimit.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between">
+                      <span className="text-[10px] uppercase text-slate-400 font-bold">Social Auto-Posts</span>
+                      <span className="font-mono font-bold text-sky-300">
+                        {viewingQuota.postsUsed.toLocaleString()} / {viewingQuota.postLimit >= 9999 ? 'Unlimited' : viewingQuota.postLimit}
                       </span>
                     </div>
                   </div>
