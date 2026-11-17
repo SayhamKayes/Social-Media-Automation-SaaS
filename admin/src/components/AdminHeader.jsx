@@ -16,7 +16,7 @@ export default function AdminHeader({ adminUser, settings = {}, onLogout }) {
   const clientPortalUrl =
     (settings?.live_client_host_url && settings.live_client_host_url.trim()) ||
     import.meta.env.VITE_CLIENT_PORTAL_URL ||
-    (isLocalHost ? 'http://localhost:3000' : 'https://social-media-automation-saas.vercel.app');
+    (isLocalHost ? 'http://localhost:3000' : 'https://skzbot.vercel.app');
 
   return (
     <header className="h-16 border-b border-purple-900/30 bg-slate-950/80 backdrop-blur-md sticky top-0 z-30 px-6 flex items-center justify-between select-none">
